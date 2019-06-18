@@ -7,6 +7,16 @@ LOCAL_MODULE := libvideo-metadata
 LOCAL_CATEGORY_PATH := libs
 LOCAL_DESCRIPTION := Parrot Drones video metadata library
 LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/include
+# Public API headers - top level headers first
+# This header list is currently used to generate a python binding
+LOCAL_EXPORT_CUSTOM_VARIABLES := LIBVIDEOMETADATA_HEADERS=$\
+	$(LOCAL_PATH)/include/video-metadata/vmeta.h:$\
+	$(LOCAL_PATH)/include/video-metadata/vmeta_frame.h:$\
+	$(LOCAL_PATH)/include/video-metadata/vmeta_frame_v1.h:$\
+	$(LOCAL_PATH)/include/video-metadata/vmeta_frame_v2.h:$\
+	$(LOCAL_PATH)/include/video-metadata/vmeta_frame_v3.h:$\
+	$(LOCAL_PATH)/include/video-metadata/vmeta_session.h;
+
 LOCAL_CFLAGS := -DVMETA_API_EXPORTS -fvisibility=hidden -std=gnu99
 
 LOCAL_SRC_FILES := \

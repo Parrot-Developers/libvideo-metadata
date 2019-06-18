@@ -1019,10 +1019,10 @@ static void usage(char *prog_name)
 	       "\n"
 	       "Options:\n"
 	       "-h | --help                        Print this message\n"
-	       "     --csv <file>                  Output to CSV file\n"
-	       "     --kml <file>                  Output to KML file\n"
+	       "     --csv  <file>                 Output to CSV file\n"
+	       "     --kml  <file>                 Output to KML file\n"
 #ifdef BUILD_JSON
-	       "     --json <file                  Output to JSON file\n"
+	       "     --json <file>                 Output to JSON file\n"
 	       "     --pretty                      Pretty output for "
 	       "JSON file\n"
 #endif /* BUILD_JSON */
