@@ -222,6 +222,9 @@ enum vmeta_stream_sdes_type {
 /* Thermal camera scale factor */
 #define VMETA_STRM_SDES_KEY_THERMAL_SCALE_FACTOR "thermal_scale_factor"
 
+/* Video mode */
+#define VMETA_STRM_SDES_KEY_VIDEO_MODE "video_mode"
+
 
 /* SDP types used on streaming */
 enum vmeta_stream_sdp_type {
@@ -312,6 +315,9 @@ enum vmeta_stream_sdp_type {
 /* Thermal camera scale factor */
 #define VMETA_STRM_SDP_KEY_THERMAL_SCALE_FACTOR                                \
 	"X-com-parrot-thermal-scale-factor"
+
+/* Video mode */
+#define VMETA_STRM_SDP_KEY_VIDEO_MODE "X-com-parrot-video-mode"
 
 
 /* Recording metadata include method */
@@ -406,6 +412,9 @@ enum vmeta_record_type {
 
 /* Thermal camera scale factor */
 #define VMETA_REC_META_KEY_THERMAL_SCALE_FACTOR "com.parrot.thermal.scalefactor"
+
+/* Video mode */
+#define VMETA_REC_META_KEY_VIDEO_MODE "com.parrot.video.mode"
 
 
 /**
@@ -608,6 +617,9 @@ struct vmeta_session {
 	/* Thermal camera metadata validity flag (1 if the thermal structure
 	 * contents are valid, 0 otherwise) */
 	uint32_t has_thermal:1;
+
+	/* Video mode */
+	char video_mode[20];
 };
 /* clang-format on */
 

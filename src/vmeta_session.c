@@ -460,6 +460,13 @@ int vmeta_session_streaming_sdes_write(
 			      userdata);
 	}
 
+	if (meta->video_mode[0] != '\0') {
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      meta->video_mode,
+		      VMETA_STRM_SDES_KEY_VIDEO_MODE,
+		      userdata);
+	}
+
 	if (meta->has_thermal) {
 		if (meta->thermal.metaversion != 0) {
 			char metaversion[10];
@@ -646,7 +653,11 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 			   0) {
 			ret = vmeta_session_thermal_scale_factor_read(
 				value, &meta->thermal.scale_factor);
+		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_VIDEO_MODE) ==
+			   0) {
+			COPY_VALUE(meta->video_mode, value);
 		}
+
 		break;
 
 	default:
@@ -792,6 +803,13 @@ int vmeta_session_streaming_sdp_write(const struct vmeta_session *meta,
 			      VMETA_STRM_SDP_KEY_TAKEOFF_LOC,
 			      userdata);
 		}
+	}
+
+	if ((!media_level) && (meta->video_mode[0] != '\0')) {
+		(*cb)(VMETA_STRM_SDP_TYPE_SESSION_ATTR,
+		      meta->video_mode,
+		      VMETA_STRM_SDP_KEY_VIDEO_MODE,
+		      userdata);
 	}
 
 	/* Below: either session-level or media-level metadata.
@@ -948,6 +966,9 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_TAKEOFF_LOC) == 0) {
 			ret = vmeta_session_location_read(value,
 							  &meta->takeoff_loc);
+
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_VIDEO_MODE) == 0) {
+			COPY_VALUE(meta->video_mode, value);
 		}
 		/* fall through */
 	case VMETA_STRM_SDP_TYPE_MEDIA_ATTR:
@@ -1191,6 +1212,13 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 			      VMETA_REC_META_KEY_PICTURE_FOV,
 			      fov,
 			      userdata);
+	}
+
+	if (meta->video_mode[0] != '\0') {
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_VIDEO_MODE,
+		      meta->video_mode,
+		      userdata);
 	}
 
 	if (meta->has_thermal) {
@@ -1509,6 +1537,9 @@ int vmeta_session_recording_read(const char *key,
 	} else if (strcmp(key, VMETA_REC_META_KEY_THERMAL_SCALE_FACTOR) == 0) {
 		ret = vmeta_session_thermal_scale_factor_read(
 			value, &meta->thermal.scale_factor);
+	} else if ((strcmp(key, VMETA_REC_META_KEY_VIDEO_MODE) == 0) &&
+		   (meta->video_mode[0] == '\0')) {
+		COPY_VALUE(meta->video_mode, value);
 	}
 
 	return ret;
@@ -1588,6 +1619,9 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 
 	if ((meta->picture_fov.has_horz) || (meta->picture_fov.has_vert))
 		vmeta_json_add_fov(jobj, "picture_fov", &meta->picture_fov);
+
+	if (meta->video_mode[0] != '\0')
+		vmeta_json_add_str(jobj, "video_mode", meta->video_mode);
 
 	if (meta->has_thermal) {
 		struct json_object *jobj_thermal = json_object_new_object();
@@ -1803,6 +1837,14 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 					"picture_fov: %s\n",
 					fov);
 		}
+	}
+
+	if (meta->video_mode[0] != '\0') {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"video_mode: %s\n",
+				meta->video_mode);
 	}
 
 	if (meta->has_thermal) {
