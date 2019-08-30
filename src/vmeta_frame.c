@@ -27,8 +27,7 @@
 #include "vmeta_priv.h"
 
 /* clang-format off */
-/* codecheck_ignore[COMPLEX_MACRO] */
-#define CHECK(_x) if ((res = (_x)) < 0) goto out
+#define CHECK(_x) do { if ((res = (_x)) < 0) goto out; } while (0)
 /* clang-format on */
 
 
@@ -176,7 +175,7 @@ const char *vmeta_frame_type_str(enum vmeta_frame_type val)
 }
 
 
-int vmeta_frame_write(struct vmeta_buffer *buf, const struct vmeta_frame *meta)
+int vmeta_frame_write(struct vmeta_buffer *buf, struct vmeta_frame *meta)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
@@ -209,6 +208,10 @@ int vmeta_frame_write(struct vmeta_buffer *buf, const struct vmeta_frame *meta)
 		res = vmeta_frame_v3_write(buf, &meta->v3);
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_write(buf, meta);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -220,36 +223,50 @@ int vmeta_frame_write(struct vmeta_buffer *buf, const struct vmeta_frame *meta)
 
 
 int vmeta_frame_read(struct vmeta_buffer *buf,
-		     struct vmeta_frame *meta,
-		     const char *rec_mime_type)
+		     const char *mime_type,
+		     struct vmeta_frame **ret_obj)
 {
 	int res = 0;
 	size_t start = 0, len = 0;
 	uint16_t id = 0;
-	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
-	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
-	memset(meta, 0, sizeof(*meta));
+	struct vmeta_frame *meta = NULL;
 
-	if (rec_mime_type) {
-		/* MIME type is provided => recording metadata */
+	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(ret_obj == NULL, EINVAL);
+
+	meta = calloc(1, sizeof(*meta));
+	if (!meta) {
+		res = -ENOMEM;
+		goto out;
+	}
+	res = vmeta_frame_ref(meta);
+	if (res != 0) {
+		free(meta);
+		meta = NULL;
+		goto out;
+	}
+
+	if (mime_type) {
+		/* MIME type is provided. Use it to get metadata type */
 
 		/* Determine type */
-		if (strcmp(rec_mime_type, VMETA_FRAME_V1_RECORDING_MIME_TYPE) ==
+		if (strcmp(mime_type, VMETA_FRAME_V1_RECORDING_MIME_TYPE) ==
 		    0) {
 			meta->type = VMETA_FRAME_TYPE_V1_RECORDING;
-		} else if (strcmp(rec_mime_type, VMETA_FRAME_V2_MIME_TYPE) ==
-			   0) {
+		} else if (strcmp(mime_type, VMETA_FRAME_V2_MIME_TYPE) == 0) {
 			meta->type = VMETA_FRAME_TYPE_V2;
-		} else if (strcmp(rec_mime_type, VMETA_FRAME_V3_MIME_TYPE) ==
-			   0) {
+		} else if (strcmp(mime_type, VMETA_FRAME_V3_MIME_TYPE) == 0) {
 			meta->type = VMETA_FRAME_TYPE_V3;
+		} else if (strcmp(mime_type, VMETA_FRAME_PROTO_MIME_TYPE) ==
+			   0) {
+			meta->type = VMETA_FRAME_TYPE_PROTO;
 		} else {
-			ULOGW("unknown metadata recording type: '%s'",
-			      rec_mime_type);
-			return -ENOSYS;
+			ULOGW("unknown metadata MIME type: '%s'", mime_type);
+			res = -ENOSYS;
+			goto out;
 		}
 	} else {
-		/* MIME type is not provided => streaming metadata */
+		/* MIME type is not provided. Guess type from first 2 bytes */
 
 		/* Compute buffer size, read Id then rewind */
 		start = buf->pos;
@@ -283,7 +300,7 @@ int vmeta_frame_read(struct vmeta_buffer *buf,
 			break;
 
 		default:
-			ULOGW("unknown metadata streaming id: 0x%04x", id);
+			ULOGW("unknown metadata id: 0x%04x", id);
 			res = -EPROTO;
 			goto out;
 		}
@@ -317,6 +334,60 @@ int vmeta_frame_read(struct vmeta_buffer *buf,
 		res = vmeta_frame_v3_read(buf, &meta->v3);
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_read(buf, &meta->proto);
+		break;
+
+	default:
+		ULOGW("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+out:
+	if (res != 0 && meta) {
+		vmeta_frame_unref(meta);
+		meta = NULL;
+	}
+	*ret_obj = meta;
+	return res;
+}
+
+
+int vmeta_frame_new(enum vmeta_frame_type type, struct vmeta_frame **ret_obj)
+{
+	int res;
+
+	ULOG_ERRNO_RETURN_ERR_IF(ret_obj == NULL, EINVAL);
+
+	struct vmeta_frame *meta = calloc(1, sizeof(*meta));
+	if (!meta) {
+		res = -ENOMEM;
+		goto out;
+	}
+	res = vmeta_frame_ref(meta);
+	if (res != 0) {
+		free(meta);
+		meta = NULL;
+		goto out;
+	}
+
+	meta->type = type;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		/* Nothing to do */
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_init(&meta->proto);
+		break;
+
 	default:
 		ULOGW("unknown metadata streaming type: %u", meta->type);
 		res = -ENOSYS;
@@ -324,14 +395,95 @@ int vmeta_frame_read(struct vmeta_buffer *buf,
 	}
 
 out:
+	if (res != 0 && meta) {
+		vmeta_frame_unref(meta);
+		meta = NULL;
+	}
+	*ret_obj = meta;
 	return res;
 }
 
 
-#ifdef BUILD_JSON
+int vmeta_frame_ref(struct vmeta_frame *meta)
+{
+	ULOG_ERRNO_RETURN_ERR_IF(!meta, EINVAL);
 
-int vmeta_frame_to_json(const struct vmeta_frame *meta,
-			struct json_object *jobj)
+#if defined(__GNUC__)
+	__atomic_add_fetch(&meta->ref_count, 1, __ATOMIC_SEQ_CST);
+#else
+#	error no atomic increment function found on this platform
+#endif
+
+	return 0;
+}
+
+
+int vmeta_frame_unref(struct vmeta_frame *meta)
+{
+	unsigned int ref;
+	int res = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(!meta, EINVAL);
+
+#if defined(__GNUC__)
+	/* Yes, this can be racy, but calling unref on an already
+	 * unrefed buffer is ugly too. We just try to catch it here for
+	 * debugging purposes */
+	ref = __atomic_load_n(&meta->ref_count, __ATOMIC_ACQUIRE);
+	if (ref < 1)
+		return -ENOENT;
+	ref = __atomic_sub_fetch(&meta->ref_count, 1, __ATOMIC_SEQ_CST);
+#else
+#	error no atomic increment function found on this platform
+#endif
+	/* Still ref, nothing to do */
+	if (ref > 0)
+		goto out;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		/* Nothing to do */
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_destroy(meta->proto);
+		meta->proto = NULL;
+		break;
+
+	default:
+		/* Just log and return 0 properly since we will free the
+		 * metadata anyway */
+		ULOGW("unknown metadata streaming type: %u", meta->type);
+		break;
+	}
+
+	free(meta);
+out:
+	return res;
+}
+
+
+int vmeta_frame_get_ref_count(struct vmeta_frame *meta)
+{
+	unsigned int ref;
+	ULOG_ERRNO_RETURN_ERR_IF(!meta, EINVAL);
+
+#if defined(__GNUC__)
+	ref = __atomic_load_n(&meta->ref_count, __ATOMIC_ACQUIRE);
+	if (ref > INT_MAX)
+		ref = INT_MAX;
+#else
+#	error no atomic increment function found on this platform
+#endif
+	return (int)ref;
+}
+
+
+int vmeta_frame_to_json(struct vmeta_frame *meta, struct json_object *jobj)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -364,6 +516,10 @@ int vmeta_frame_to_json(const struct vmeta_frame *meta,
 		res = vmeta_frame_v3_to_json(&meta->v3, jobj);
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_to_json(meta, jobj);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -373,15 +529,33 @@ int vmeta_frame_to_json(const struct vmeta_frame *meta,
 	return res;
 }
 
-#else /* BUILD_JSON */
 
-int vmeta_frame_to_json(const struct vmeta_frame *meta,
-			struct json_object *jobj)
+int vmeta_frame_to_json_str(struct vmeta_frame *meta,
+			    char *output,
+			    unsigned int len)
 {
-	return -ENOSYS;
-}
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(output == NULL, EINVAL);
 
-#endif /* BUILD_JSON */
+	const char *jstr;
+	struct json_object *jobj = json_object_new_object();
+	if (jobj == NULL)
+		return -ENOMEM;
+	int ret = vmeta_frame_to_json(meta, jobj);
+	if (ret < 0)
+		goto out;
+
+	jstr = json_object_to_json_string(jobj);
+	if (strlen(jstr) + 1 > len) {
+		ret = -ENOBUFS;
+		goto out;
+	}
+	strcpy(output, jstr);
+
+out:
+	json_object_put(jobj);
+	return ret;
+}
 
 
 ssize_t
@@ -397,26 +571,30 @@ vmeta_frame_to_csv(const struct vmeta_frame *meta, char *str, size_t maxlen)
 		break;
 
 	case VMETA_FRAME_TYPE_V1_RECORDING:
-		len += vmeta_frame_v1_recording_to_csv(
+		len = vmeta_frame_v1_recording_to_csv(
 			&meta->v1_rec, str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
-		len += vmeta_frame_v1_streaming_basic_to_csv(
+		len = vmeta_frame_v1_streaming_basic_to_csv(
 			&meta->v1_strm_basic, str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
-		len += vmeta_frame_v1_streaming_extended_to_csv(
+		len = vmeta_frame_v1_streaming_extended_to_csv(
 			&meta->v1_strm_ext, str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V2:
-		len += vmeta_frame_v2_to_csv(&meta->v2, str, maxlen);
+		len = vmeta_frame_v2_to_csv(&meta->v2, str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V3:
-		len += vmeta_frame_v3_to_csv(&meta->v3, str, maxlen);
+		len = vmeta_frame_v3_to_csv(&meta->v3, str, maxlen);
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		len = (size_t)-ENOSYS;
 		break;
 
 	default:
@@ -440,24 +618,27 @@ vmeta_frame_csv_header(enum vmeta_frame_type type, char *str, size_t maxlen)
 		break;
 
 	case VMETA_FRAME_TYPE_V1_RECORDING:
-		len += vmeta_frame_v1_recording_csv_header(str, maxlen);
+		len = vmeta_frame_v1_recording_csv_header(str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
-		len += vmeta_frame_v1_streaming_basic_csv_header(str, maxlen);
+		len = vmeta_frame_v1_streaming_basic_csv_header(str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
-		len += vmeta_frame_v1_streaming_extended_csv_header(str,
-								    maxlen);
+		len = vmeta_frame_v1_streaming_extended_csv_header(str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V2:
-		len += vmeta_frame_v2_csv_header(str, maxlen);
+		len = vmeta_frame_v2_csv_header(str, maxlen);
 		break;
 
 	case VMETA_FRAME_TYPE_V3:
-		len += vmeta_frame_v3_csv_header(str, maxlen);
+		len = vmeta_frame_v3_csv_header(str, maxlen);
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		len = (size_t)-ENOSYS;
 		break;
 
 	default:
@@ -482,6 +663,8 @@ const char *vmeta_frame_get_mime_type(enum vmeta_frame_type type)
 		return VMETA_FRAME_V2_MIME_TYPE;
 	case VMETA_FRAME_TYPE_V3:
 		return VMETA_FRAME_V3_MIME_TYPE;
+	case VMETA_FRAME_TYPE_PROTO:
+		return VMETA_FRAME_PROTO_MIME_TYPE;
 	default:
 		ULOGW("unknown metadata type: %u", type);
 		return NULL;

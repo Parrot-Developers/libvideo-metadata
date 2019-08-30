@@ -46,11 +46,109 @@ extern "C" {
 #endif /* !VMETA_API_EXPORTS */
 
 
-#define VMETA_API_VERSION 1
+#define VMETA_API_VERSION 2
 
 
 /* Forward declaration */
 struct json_object;
+
+
+/* Camera type */
+enum vmeta_camera_type {
+	/* Unknown camera type */
+	VMETA_CAMERA_TYPE_UNKNOWN = 0,
+
+	/* Front camera */
+	VMETA_CAMERA_TYPE_FRONT,
+
+	/* Front stereo left camera */
+	VMETA_CAMERA_TYPE_FRONT_STEREO_LEFT,
+
+	/* Front stereo right camera */
+	VMETA_CAMERA_TYPE_FRONT_STEREO_RIGHT,
+
+	/* Vertical camera */
+	VMETA_CAMERA_TYPE_VERTICAL,
+
+	/* Disparity map */
+	VMETA_CAMERA_TYPE_DISPARITY,
+};
+
+
+/* Video mode */
+enum vmeta_video_mode {
+	/* Unknown video mode */
+	VMETA_VIDEO_MODE_UNKNOWN = 0,
+
+	/* Standard video mode */
+	VMETA_VIDEO_MODE_STANDARD,
+
+	/* Hyperlapse video mode */
+	VMETA_VIDEO_MODE_HYPERLAPSE,
+
+	/* Slow motion video mode */
+	VMETA_VIDEO_MODE_SLOWMOTION,
+};
+
+
+/* Video stop reason */
+enum vmeta_video_stop_reason {
+	/* Unknown stop reason */
+	VMETA_VIDEO_STOP_REASON_UNKNOWN = 0,
+
+	/* User request stop reason */
+	VMETA_VIDEO_STOP_REASON_USER,
+
+	/* Reconfigure stop reason */
+	VMETA_VIDEO_STOP_REASON_RECONFIGURATION,
+
+	/* Poor storage performance stop reason */
+	VMETA_VIDEO_STOP_REASON_POOR_STORAGE_PERF,
+
+	/* Storage full stop reason */
+	VMETA_VIDEO_STOP_REASON_STORAGE_FULL,
+
+	/* Recovery stop reason */
+	VMETA_VIDEO_STOP_REASON_RECOVERY,
+
+	/* End-of-stream stop reason */
+	VMETA_VIDEO_STOP_REASON_END_OF_STREAM,
+
+	/* Shutdown stop reason */
+	VMETA_VIDEO_STOP_REASON_SHUTDOWN,
+};
+
+
+/* Image dynamic range */
+enum vmeta_dynamic_range {
+	/* Unknown dynamic range */
+	VMETA_DYNAMIC_RANGE_UNKNOWN = 0,
+
+	/* Standard dynamic range */
+	VMETA_DYNAMIC_RANGE_SDR,
+
+	/* High dynamic range: Parrot 8bit HDR */
+	VMETA_DYNAMIC_RANGE_HDR8,
+
+	/* High dynamic range: standard 10bit HDR10
+	 * (Rec. ITU-R BT.2020 color primaries,
+	 * SMPTE ST 2084 perceptual quantization transfer function
+	 * and SMPTE ST 2086 metadata) */
+	VMETA_DYNAMIC_RANGE_HDR10,
+};
+
+
+/* Image tone mapping */
+enum vmeta_tone_mapping {
+	/* Unknown tone mapping */
+	VMETA_TONE_MAPPING_UNKNOWN = 0,
+
+	/* Standard tone mapping */
+	VMETA_TONE_MAPPING_STANDARD,
+
+	/* Parrot P-log tone mapping */
+	VMETA_TONE_MAPPING_P_LOG,
+};
 
 
 /* Metadata buffer */
@@ -195,7 +293,7 @@ struct vmeta_thermal_spot {
 #define VMETA_LOCATION_INVALID_SV_COUNT ((uint8_t)-1)
 
 
-/* Geographic coordinates location */
+/* Location on earth */
 struct vmeta_location {
 	/* Latitude (deg) */
 	double latitude;
@@ -203,8 +301,14 @@ struct vmeta_location {
 	/* Longitude (deg) */
 	double longitude;
 
-	/* Altitude ASL (m) */
+	/* Altitude (either AMSL or above the WGS 84 ellipsoid) (m) */
 	double altitude;
+
+	/* Horizontal location accuracy (m), zero means unknown */
+	float horizontal_accuracy;
+
+	/* Vertical location accuracy (m), zero means unknown */
+	float vertical_accuracy;
 
 	/* GPS satellite vehicle count; set to VMETA_LOCATION_INVALID_SV_COUNT
 	 * if not available even if valid is set */
@@ -234,6 +338,104 @@ void vmeta_euler_to_quat(const struct vmeta_euler *euler,
 VMETA_API
 void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 			 struct vmeta_euler *euler);
+
+
+/**
+ * Get an enum vmeta_camera_type value from a string.
+ * Valid strings are only the suffix of the camera type (eg. 'FRONT').
+ * The case is ignored.
+ * @param str: camera type string to convert
+ * @return the enum vmeta_camera_type value or
+ * VMETA_CAMERA_TYPE_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_camera_type vmeta_camera_type_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_camera_type value.
+ * @param val: camera type value to convert
+ * @return a string description of the camera type
+ */
+VMETA_API const char *vmeta_camera_type_to_str(enum vmeta_camera_type val);
+
+
+/**
+ * Get an enum vmeta_video_mode value from a string.
+ * Valid strings are only the suffix of the video mode (eg. 'STANDARD').
+ * The case is ignored.
+ * @param str: video mode string to convert
+ * @return the enum vmeta_video_mode value or
+ * VMETA_VIDEO_MODE_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_video_mode vmeta_video_mode_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_video_mode value.
+ * @param val: video mode value to convert
+ * @return a string description of the video mode
+ */
+VMETA_API const char *vmeta_video_mode_to_str(enum vmeta_video_mode val);
+
+
+/**
+ * Get an enum vmeta_video_stop_reason value from a string
+ * Valid strings are only the suffix of the stop reason (eg. 'USER').
+ * The case is ignored.
+ * @param str: stop reason string to convert
+ * @return the enum vmeta_video_stop_reason value or
+ * VMETA_VIDEO_STOP_REASON_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_video_stop_reason
+vmeta_video_stop_reason_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_video_stop_reason value.
+ * @param val: stop reason value to convert
+ * @return a string description of the stop reason
+ */
+VMETA_API const char *
+vmeta_video_stop_reason_to_str(enum vmeta_video_stop_reason val);
+
+
+/**
+ * Get an enum vmeta_dynamic_range value from a string
+ * Valid strings are only the suffix of the dynamic range (eg. 'HDR10').
+ * The case is ignored.
+ * @param str: dynamic range string to convert
+ * @return the enum vmeta_dynamic_range value or
+ * VMETA_DYNAMIC_RANGE_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_dynamic_range
+vmeta_dynamic_range_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_dynamic_range value.
+ * @param val: dynamic range value to convert
+ * @return a string description of the dynamic range
+ */
+VMETA_API const char *vmeta_dynamic_range_to_str(enum vmeta_dynamic_range val);
+
+
+/**
+ * Get an enum vmeta_tone_mapping value from a string
+ * Valid strings are only the suffix of the tone mapping (eg. 'plog').
+ * The case is ignored.
+ * @param str: tone mapping string to convert
+ * @return the enum vmeta_tone_mapping value or
+ * VMETA_TONE_MAPPING_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_tone_mapping vmeta_tone_mapping_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_tone_mapping value.
+ * @param val: tone mapping value to convert
+ * @return a string description of the tone mapping
+ */
+VMETA_API const char *vmeta_tone_mapping_to_str(enum vmeta_tone_mapping val);
 
 
 #include "video-metadata/vmeta_frame.h"

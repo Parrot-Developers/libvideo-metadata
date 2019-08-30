@@ -27,7 +27,13 @@
 #ifndef _VMETA_JSON_H_
 #define _VMETA_JSON_H_
 
-#ifdef BUILD_JSON
+
+static inline int
+vmeta_json_add_bool(struct json_object *jobj, const char *name, int val)
+{
+	json_object_object_add(jobj, name, json_object_new_boolean(val));
+	return 0;
+}
 
 
 static inline int
@@ -102,7 +108,5 @@ int vmeta_json_add_thermal_spot(struct json_object *jobj,
 				const char *name,
 				const struct vmeta_thermal_spot *val);
 
-
-#endif /* BUILD_JSON */
 
 #endif /* !_VMETA_JSON_H_ */

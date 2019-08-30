@@ -156,7 +156,7 @@ enum vmeta_automation_anim {
 	/* Candle animation in progress */
 	VMETA_AUTOMATION_ANIM_CANDLE,
 
-	/* Front filp animation in progress */
+	/* Front flip animation in progress */
 	VMETA_AUTOMATION_ANIM_FLIP_FRONT,
 
 	/* Back flip animation in progress */
@@ -208,6 +208,9 @@ enum vmeta_frame_type {
 
 	/* "Parrot Video Metadata" v3 */
 	VMETA_FRAME_TYPE_V3,
+
+	/* "Parrot Video Metadata" protobuf-based */
+	VMETA_FRAME_TYPE_PROTO,
 };
 
 
@@ -335,6 +338,7 @@ VMETA_API
 const char *vmeta_frame_type_str(enum vmeta_frame_type val);
 
 
+#include "video-metadata/vmeta_frame_proto.h"
 #include "video-metadata/vmeta_frame_v1.h"
 #include "video-metadata/vmeta_frame_v2.h"
 #include "video-metadata/vmeta_frame_v3.h"
@@ -383,7 +387,16 @@ struct vmeta_frame {
 
 		/* "Parrot Video Metadata" v3 */
 		struct vmeta_frame_v3 v3;
+
+		/* "Parrot Video Metadata" protobuf-based */
+		struct vmeta_frame_proto *proto;
 	};
+
+	/* Frame metadata ref_count.
+	 * DO NOT USE THIS FIELD!
+	 * Use vmeta_frame_ref()/vmeta_frame_unref() to modify it, or
+	 * vmeta_frame_get_ref_count() to read it. */
+	unsigned int ref_count;
 };
 
 
@@ -402,29 +415,72 @@ struct vmeta_frame {
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_write(struct vmeta_buffer *buf, const struct vmeta_frame *meta);
+int vmeta_frame_write(struct vmeta_buffer *buf, struct vmeta_frame *meta);
 
 
 /**
  * Read frame metadata.
- * This function fills the supplied structure with the deserialized metadata,
- * detecting the metadata type. For recording metadata, the metadata MIME type
- * (from MP4 boxes metadata) must be supplied.
+ * This function allocates a new metadata structure, deserializing data from
+ * the provided buffer, and detecting the metadata type when possible.
+ * Providing the MIME type is mandatory for protobuf-based metadata or metadata
+ * from recording files (MP4).
  * The pos field in the buf structure must be set to the starting position for
  * reading (can be 0 if no previous data is present in the buffer). The size
  * of the buffer (len field) must be sufficient to allow reading the metadata
  * otherwise an error is returned. The ownership of the buffer stays with
  * the caller.
+ * The allocated structure has a reference count of 1.
  * @param buf: pointer to the buffer structure
- * @param meta: pointer to the frame metadata structure (output)
- * @param rec_mime_type: pointer to the recording metadata MIME type
- *                       (NULL for streaming metadata)
+ * @param mime_type: pointer to the metadata MIME type, if known;
+ *                   if NULL, the type will be automatically detected when
+ *                   possible.
+ * @param ret_obj: pointer filled with the new vmeta_frame structure
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
 int vmeta_frame_read(struct vmeta_buffer *buf,
-		     struct vmeta_frame *meta,
-		     const char *rec_mime_type);
+		     const char *mime_type,
+		     struct vmeta_frame **ret_obj);
+
+
+/**
+ * Create a vmeta_frame structure for writing.
+ * The returned structure has a reference count of 1.
+ * @param type: vmeta_frame type to create.
+ * @param ret_obj: pointer filled with the new vmeta_frame structure
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_new(enum vmeta_frame_type type,
+			      struct vmeta_frame **ret_obj);
+
+
+/**
+ * Increment the reference counter of a vmeta_frame structure.
+ * @param meta: pointer to the frame metadata structure
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_ref(struct vmeta_frame *meta);
+
+
+/**
+ * Decrement the reference counter of a vmeta_frame structure.
+ * When the reference counter reaches zero, the vmeta_frame structure will be
+ * released. The caller shoud no longer use the meta structure after calling
+ * this.
+ * @param meta: pointer to the frame metadata structure
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_unref(struct vmeta_frame *meta);
+
+
+/**
+ * Read the reference counter of a vmeta_frame structure.
+ * If the reference counter is greater than INT_MAX, INT_MAX will be returned.
+ * @param meta: pointer to the frame metadata structure
+ * @return the current reference count of the metadata on success
+ *         (0 or greater), negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_get_ref_count(struct vmeta_frame *meta);
 
 
 /**
@@ -436,8 +492,23 @@ int vmeta_frame_read(struct vmeta_buffer *buf,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_to_json(const struct vmeta_frame *meta,
-			struct json_object *jobj);
+int vmeta_frame_to_json(struct vmeta_frame *meta, struct json_object *jobj);
+
+
+/**
+ * Write frame metadata to a JSON string.
+ * This function fills the str array with the null-terminated JSON string.
+ * The string must have been previously allocated. The function writes
+ * up to len characters.
+ * @param meta: pointer to a frame metadata structure
+ * @param output: pointer to the string to write to
+ * @param len: maximum length of the string
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_to_json_str(struct vmeta_frame *meta,
+			    char *output,
+			    unsigned int len);
 
 
 /**
@@ -493,7 +564,7 @@ const char *vmeta_frame_get_mime_type(enum vmeta_frame_type type);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_location(const struct vmeta_frame *meta,
+int vmeta_frame_get_location(struct vmeta_frame *meta,
 			     struct vmeta_location *loc);
 
 
@@ -507,7 +578,7 @@ int vmeta_frame_get_location(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_speed_ned(const struct vmeta_frame *meta,
+int vmeta_frame_get_speed_ned(struct vmeta_frame *meta,
 			      struct vmeta_ned *speed);
 
 
@@ -522,7 +593,7 @@ int vmeta_frame_get_speed_ned(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_air_speed(const struct vmeta_frame *meta, float *speed);
+int vmeta_frame_get_air_speed(struct vmeta_frame *meta, float *speed);
 
 
 /**
@@ -535,8 +606,7 @@ int vmeta_frame_get_air_speed(const struct vmeta_frame *meta, float *speed);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_ground_distance(const struct vmeta_frame *meta,
-				    double *dist);
+int vmeta_frame_get_ground_distance(struct vmeta_frame *meta, double *dist);
 
 
 /**
@@ -549,7 +619,7 @@ int vmeta_frame_get_ground_distance(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_drone_euler(const struct vmeta_frame *meta,
+int vmeta_frame_get_drone_euler(struct vmeta_frame *meta,
 				struct vmeta_euler *euler);
 
 
@@ -563,7 +633,7 @@ int vmeta_frame_get_drone_euler(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_drone_quat(const struct vmeta_frame *meta,
+int vmeta_frame_get_drone_quat(struct vmeta_frame *meta,
 			       struct vmeta_quaternion *quat);
 
 
@@ -577,7 +647,7 @@ int vmeta_frame_get_drone_quat(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_frame_euler(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_euler(struct vmeta_frame *meta,
 				struct vmeta_euler *euler);
 
 
@@ -591,7 +661,7 @@ int vmeta_frame_get_frame_euler(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_frame_quat(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_quat(struct vmeta_frame *meta,
 			       struct vmeta_quaternion *quat);
 
 
@@ -605,7 +675,7 @@ int vmeta_frame_get_frame_quat(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_frame_base_euler(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_base_euler(struct vmeta_frame *meta,
 				     struct vmeta_euler *euler);
 
 
@@ -619,7 +689,7 @@ int vmeta_frame_get_frame_base_euler(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_frame_base_quat(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_base_quat(struct vmeta_frame *meta,
 				    struct vmeta_quaternion *quat);
 
 
@@ -633,7 +703,7 @@ int vmeta_frame_get_frame_base_quat(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_frame_timestamp(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_timestamp(struct vmeta_frame *meta,
 				    uint64_t *timestamp);
 
 
@@ -647,7 +717,7 @@ int vmeta_frame_get_frame_timestamp(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_camera_pan(const struct vmeta_frame *meta, float *pan);
+int vmeta_frame_get_camera_pan(struct vmeta_frame *meta, float *pan);
 
 
 /**
@@ -660,20 +730,20 @@ int vmeta_frame_get_camera_pan(const struct vmeta_frame *meta, float *pan);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_camera_tilt(const struct vmeta_frame *meta, float *tilt);
+int vmeta_frame_get_camera_tilt(struct vmeta_frame *meta, float *tilt);
 
 
 /**
- * Get the frame exposure time from a frame metadata structure.
+ * Get the frame exposure time in milliseconds from a frame metadata structure.
  * The function fills the exp value with the frame exposure time if it is
  * available according to the metadata type. If the frame exposure time is
  * not available for the given type, -ENOENT is returned.
  * @param meta: pointer to a frame metadata structure
- * @param exp: pointer to a frame exposure time value (output)
+ * @param exp: pointer to a frame exposure time value in ms (output).
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_exposure_time(const struct vmeta_frame *meta, float *exp);
+int vmeta_frame_get_exposure_time(struct vmeta_frame *meta, float *exp);
 
 
 /**
@@ -686,7 +756,7 @@ int vmeta_frame_get_exposure_time(const struct vmeta_frame *meta, float *exp);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_gain(const struct vmeta_frame *meta, uint16_t *gain);
+int vmeta_frame_get_gain(struct vmeta_frame *meta, uint16_t *gain);
 
 
 /**
@@ -700,7 +770,7 @@ int vmeta_frame_get_gain(const struct vmeta_frame *meta, uint16_t *gain);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_awb_r_gain(const struct vmeta_frame *meta, float *gain);
+int vmeta_frame_get_awb_r_gain(struct vmeta_frame *meta, float *gain);
 
 
 /**
@@ -714,7 +784,7 @@ int vmeta_frame_get_awb_r_gain(const struct vmeta_frame *meta, float *gain);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_awb_b_gain(const struct vmeta_frame *meta, float *gain);
+int vmeta_frame_get_awb_b_gain(struct vmeta_frame *meta, float *gain);
 
 
 /**
@@ -727,7 +797,7 @@ int vmeta_frame_get_awb_b_gain(const struct vmeta_frame *meta, float *gain);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_picture_h_fov(const struct vmeta_frame *meta, float *fov);
+int vmeta_frame_get_picture_h_fov(struct vmeta_frame *meta, float *fov);
 
 
 /**
@@ -740,7 +810,7 @@ int vmeta_frame_get_picture_h_fov(const struct vmeta_frame *meta, float *fov);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_picture_v_fov(const struct vmeta_frame *meta, float *fov);
+int vmeta_frame_get_picture_v_fov(struct vmeta_frame *meta, float *fov);
 
 
 /**
@@ -753,8 +823,7 @@ int vmeta_frame_get_picture_v_fov(const struct vmeta_frame *meta, float *fov);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_link_goodput(const struct vmeta_frame *meta,
-				 uint32_t *goodput);
+int vmeta_frame_get_link_goodput(struct vmeta_frame *meta, uint32_t *goodput);
 
 
 /**
@@ -767,8 +836,7 @@ int vmeta_frame_get_link_goodput(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_link_quality(const struct vmeta_frame *meta,
-				 uint8_t *quality);
+int vmeta_frame_get_link_quality(struct vmeta_frame *meta, uint8_t *quality);
 
 
 /**
@@ -781,7 +849,7 @@ int vmeta_frame_get_link_quality(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_wifi_rssi(const struct vmeta_frame *meta, int8_t *rssi);
+int vmeta_frame_get_wifi_rssi(struct vmeta_frame *meta, int8_t *rssi);
 
 
 /**
@@ -794,8 +862,7 @@ int vmeta_frame_get_wifi_rssi(const struct vmeta_frame *meta, int8_t *rssi);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_battery_pencentage(const struct vmeta_frame *meta,
-				       uint8_t *bat);
+int vmeta_frame_get_battery_percentage(struct vmeta_frame *meta, uint8_t *bat);
 
 
 /**
@@ -808,7 +875,7 @@ int vmeta_frame_get_battery_pencentage(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_flying_state(const struct vmeta_frame *meta,
+int vmeta_frame_get_flying_state(struct vmeta_frame *meta,
 				 enum vmeta_flying_state *state);
 
 
@@ -822,7 +889,7 @@ int vmeta_frame_get_flying_state(const struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_piloting_mode(const struct vmeta_frame *meta,
+int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 				  enum vmeta_piloting_mode *mode);
 
 

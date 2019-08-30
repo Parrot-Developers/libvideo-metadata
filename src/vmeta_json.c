@@ -26,22 +26,30 @@
 
 #include "vmeta_priv.h"
 
-#ifdef BUILD_JSON
-
 
 int vmeta_json_add_location(struct json_object *jobj,
 			    const char *name,
 			    const struct vmeta_location *val)
 {
+	if (!val->valid)
+		return 0;
+
 	struct json_object *jobj_val = json_object_new_object();
 
-	if (val->valid) {
-		vmeta_json_add_double(jobj_val, "latitude", val->latitude);
-		vmeta_json_add_double(jobj_val, "longitude", val->longitude);
-		vmeta_json_add_double(jobj_val, "altitude", val->altitude);
-		if (val->sv_count != VMETA_LOCATION_INVALID_SV_COUNT)
-			vmeta_json_add_int(jobj_val, "sv_count", val->sv_count);
+	vmeta_json_add_double(jobj_val, "latitude", val->latitude);
+	vmeta_json_add_double(jobj_val, "longitude", val->longitude);
+	vmeta_json_add_double(jobj_val, "altitude", val->altitude);
+	if (val->horizontal_accuracy != 0.) {
+		vmeta_json_add_double(jobj_val,
+				      "horizontal_accuracy",
+				      val->horizontal_accuracy);
 	}
+	if (val->vertical_accuracy != 0.) {
+		vmeta_json_add_double(
+			jobj_val, "vertical_accuracy", val->vertical_accuracy);
+	}
+	if (val->sv_count != VMETA_LOCATION_INVALID_SV_COUNT)
+		vmeta_json_add_int(jobj_val, "sv_count", val->sv_count);
 
 	json_object_object_add(jobj, name, jobj_val);
 	return 0;
@@ -169,6 +177,3 @@ int vmeta_json_add_thermal_spot(struct json_object *jobj,
 	json_object_object_add(jobj, name, jobj_val);
 	return 0;
 }
-
-
-#endif /* BUILD_JSON */

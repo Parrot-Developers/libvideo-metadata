@@ -27,8 +27,7 @@
 #include "vmeta_priv.h"
 
 /* clang-format off */
-/* codecheck_ignore[COMPLEX_MACRO] */
-#define CHECK(_x) if ((res = (_x)) < 0) goto out
+#define CHECK(_x) do { if ((res = (_x)) < 0) goto out; } while (0)
 /* clang-format on */
 
 
@@ -282,8 +281,6 @@ out:
 }
 
 
-#ifdef BUILD_JSON
-
 int vmeta_frame_v3_to_json(const struct vmeta_frame_v3 *meta,
 			   struct json_object *jobj)
 {
@@ -363,16 +360,6 @@ int vmeta_frame_v3_to_json(const struct vmeta_frame_v3 *meta,
 
 	return 0;
 }
-
-#else /* BUILD_JSON */
-
-int vmeta_frame_v3_to_json(const struct vmeta_frame_v3 *meta,
-			   struct json_object *jobj)
-{
-	return -ENOSYS;
-}
-
-#endif /* BUILD_JSON */
 
 
 size_t vmeta_frame_v3_to_csv(const struct vmeta_frame_v3 *meta,
@@ -510,36 +497,37 @@ size_t vmeta_frame_v3_csv_header(char *str, size_t maxlen)
 		str + len,
 		len,
 		maxlen - len,
-		"drone_quat_w drone_quat_x drone_quat_y drone_quat_z"
-		" location_valid location_latitude location_longitude"
-		" location_altitude location_sv_count"
-		" ground_distance speed_north speed_east speed_down air_speed"
-		" frame_base_quat_w frame_base_quat_x frame_base_quat_y"
-		" frame_base_quat_z frame_quat_w frame_quat_x frame_quat_y"
-		" frame_quat_z exposure_time gain"
-		" awb_r_gain awb_b_gain picture_hfov picture_vfov"
-		" link_goodput link_quality wifi_rssi battery_percentage"
-		" animation state mode"
-		" frame_timestamp"
-		" automation_framing_target_valid"
-		" automation_framing_target_latitude"
-		" automation_framing_target_longitude"
-		" automation_framing_target_altitude"
-		" automation_framing_target_sv_count"
-		" automation_flight_destination_valid"
-		" automation_flight_destination_latitude"
-		" automation_flight_destination_longitude"
-		" automation_flight_destination_altitude"
-		" automation_flight_destination_sv_count"
-		" automation_followme_enabled automation_lookatme_enabled"
-		" automation_angle_locked automation_animation"
-		" thermal_cablib_state"
-		" thermal_min_valid"
-		" thermal_min_x thermal_min_y thermal_min_temp"
-		" thermal_max_valid"
-		" thermal_max_x thermal_max_y thermal_max_temp"
-		" thermal_probe_valid"
-		" thermal_probe_x thermal_probe_y thermal_probe_temp");
+		"drone_quat_w drone_quat_x drone_quat_y drone_quat_z "
+		"location_valid location_latitude location_longitude "
+		"location_altitude location_horizontal_accuracy "
+		"location_vertical_accuracy location_sv_count "
+		"ground_distance speed_north speed_east speed_down air_speed "
+		"frame_base_quat_w frame_base_quat_x frame_base_quat_y "
+		"frame_base_quat_z frame_quat_w frame_quat_x frame_quat_y "
+		"frame_quat_z exposure_time gain "
+		"awb_r_gain awb_b_gain picture_hfov picture_vfov "
+		"link_goodput link_quality wifi_rssi battery_percentage "
+		"animation state mode "
+		"frame_timestamp "
+		"automation_framing_target_valid "
+		"automation_framing_target_latitude "
+		"automation_framing_target_longitude "
+		"automation_framing_target_altitude "
+		"automation_framing_target_sv_count "
+		"automation_flight_destination_valid "
+		"automation_flight_destination_latitude "
+		"automation_flight_destination_longitude "
+		"automation_flight_destination_altitude "
+		"automation_flight_destination_sv_count "
+		"automation_followme_enabled automation_lookatme_enabled "
+		"automation_angle_locked automation_animation "
+		"thermal_cablib_state "
+		"thermal_min_valid "
+		"thermal_min_x thermal_min_y thermal_min_temp "
+		"thermal_max_valid "
+		"thermal_max_x thermal_max_y thermal_max_temp "
+		"thermal_probe_valid "
+		"thermal_probe_x thermal_probe_y thermal_probe_temp");
 
 	return len;
 }

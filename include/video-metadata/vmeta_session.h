@@ -172,6 +172,12 @@ enum vmeta_stream_sdes_type {
 /* Boot UUID */
 #define VMETA_STRM_SDES_KEY_BOOT_ID "boot_id"
 
+/* Flight UUID */
+#define VMETA_STRM_SDES_KEY_FLIGHT_ID "flight_id"
+
+/* Custom ID */
+#define VMETA_STRM_SDES_KEY_CUSTOM_ID "custom_id"
+
 /* Product maker */
 #define VMETA_STRM_SDES_KEY_MAKER "maker"
 
@@ -222,8 +228,20 @@ enum vmeta_stream_sdes_type {
 /* Thermal camera scale factor */
 #define VMETA_STRM_SDES_KEY_THERMAL_SCALE_FACTOR "thermal_scale_factor"
 
+/* Camera type */
+#define VMETA_STRM_SDES_KEY_CAMERA_TYPE "camera_type"
+
 /* Video mode */
 #define VMETA_STRM_SDES_KEY_VIDEO_MODE "video_mode"
+
+/* Video stop reason */
+#define VMETA_STRM_SDES_KEY_VIDEO_STOP_REASON "video_stop_reason"
+
+/* Image dynamic range */
+#define VMETA_STRM_SDES_KEY_DYNAMIC_RANGE "dynamic_range"
+
+/* Image tone mapping */
+#define VMETA_STRM_SDES_KEY_TONE_MAPPING "tone_mapping"
 
 
 /* SDP types used on streaming */
@@ -239,6 +257,9 @@ enum vmeta_stream_sdp_type {
 
 	/* Session-level attribute extensions ('a=X-*') */
 	VMETA_STRM_SDP_TYPE_SESSION_ATTR,
+
+	/* Media-level info ('i='): used for media description */
+	VMETA_STRM_SDP_TYPE_MEDIA_INFO,
 
 	/* Media-level attribute extensions ('a=X-*') */
 	VMETA_STRM_SDP_TYPE_MEDIA_ATTR,
@@ -266,6 +287,12 @@ enum vmeta_stream_sdp_type {
 
 /* Boot UUID */
 #define VMETA_STRM_SDP_KEY_BOOT_ID "X-com-parrot-boot-id"
+
+/* Flight UUID */
+#define VMETA_STRM_SDP_KEY_FLIGHT_ID "X-com-parrot-flight-id"
+
+/* Custom ID */
+#define VMETA_STRM_SDP_KEY_CUSTOM_ID "X-com-parrot-custom-id"
 
 /* Product maker */
 #define VMETA_STRM_SDP_KEY_MAKER "X-com-parrot-maker"
@@ -316,8 +343,20 @@ enum vmeta_stream_sdp_type {
 #define VMETA_STRM_SDP_KEY_THERMAL_SCALE_FACTOR                                \
 	"X-com-parrot-thermal-scale-factor"
 
+/* Camera type */
+#define VMETA_STRM_SDP_KEY_CAMERA_TYPE "X-com-parrot-camera-type"
+
 /* Video mode */
 #define VMETA_STRM_SDP_KEY_VIDEO_MODE "X-com-parrot-video-mode"
+
+/* Video stop reason */
+#define VMETA_STRM_SDP_KEY_VIDEO_STOP_REASON "X-com-parrot-video-stop-reason"
+
+/* Image dynamic range */
+#define VMETA_STRM_SDP_KEY_DYNAMIC_RANGE "X-com-parrot-dynamic-range"
+
+/* Image tone mapping */
+#define VMETA_STRM_SDP_KEY_TONE_MAPPING "X-com-parrot-tone-mapping"
 
 
 /* Recording metadata include method */
@@ -384,6 +423,12 @@ enum vmeta_record_type {
 /* Boot UUID */
 #define VMETA_REC_META_KEY_BOOT_ID "com.parrot.boot.id"
 
+/* Flight UUID */
+#define VMETA_REC_META_KEY_FLIGHT_ID "com.parrot.flight.id"
+
+/* Custom ID */
+#define VMETA_REC_META_KEY_CUSTOM_ID "com.parrot.custom.id"
+
 /* Picture horizontal field of view
  * (deprecated; use VMETA_REC_META_KEY_PICTURE_FOV) */
 #define VMETA_REC_META_KEY_PICTURE_HORZ_FOV "com.parrot.picture.hfov"
@@ -413,8 +458,20 @@ enum vmeta_record_type {
 /* Thermal camera scale factor */
 #define VMETA_REC_META_KEY_THERMAL_SCALE_FACTOR "com.parrot.thermal.scalefactor"
 
+/* Camera type */
+#define VMETA_REC_META_KEY_CAMERA_TYPE "com.parrot.camera.type"
+
 /* Video mode */
 #define VMETA_REC_META_KEY_VIDEO_MODE "com.parrot.video.mode"
+
+/* Video stop reason */
+#define VMETA_REC_META_KEY_VIDEO_STOP_REASON "com.parrot.video.stop.reason"
+
+/* Image dynamic range */
+#define VMETA_REC_META_KEY_DYNAMIC_RANGE "com.parrot.dynamic.range"
+
+/* Image tone mapping */
+#define VMETA_REC_META_KEY_TONE_MAPPING "com.parrot.tone.mapping"
 
 
 /**
@@ -605,6 +662,13 @@ struct vmeta_session {
 	 * (unused on the controller side) */
 	char boot_id[33];
 
+	/* Flight UUID (32-chars hex string representing a 128bits value)
+	 * (unused on the controller side) */
+	char flight_id[33];
+
+	/* Application-defined custom ID (unused on the controller side) */
+	char custom_id[80];
+
 	/* Takeoff location (unused on the controller side) */
 	struct vmeta_location takeoff_loc;
 
@@ -618,8 +682,20 @@ struct vmeta_session {
 	 * contents are valid, 0 otherwise) */
 	uint32_t has_thermal:1;
 
+	/* Camera type */
+	enum vmeta_camera_type camera_type;
+
 	/* Video mode */
-	char video_mode[20];
+	enum vmeta_video_mode video_mode;
+
+	/* Video stop reason */
+	enum vmeta_video_stop_reason video_stop_reason;
+
+	/* Image dynamic range */
+	enum vmeta_dynamic_range dynamic_range;
+
+	/* Image tone mapping */
+	enum vmeta_tone_mapping tone_mapping;
 };
 /* clang-format on */
 

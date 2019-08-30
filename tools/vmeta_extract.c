@@ -30,6 +30,7 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <json-c/json.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,16 +49,13 @@
 #ifdef BUILD_LIBPCAP
 #	include <pcap/pcap.h>
 #endif /* BUILD_LIBPCAP */
-#ifdef BUILD_JSON
-#	include <json-c/json.h>
-#endif /* BUILD_JSON */
 
 #define ULOG_TAG vmeta_extract
 #include <ulog.h>
 ULOG_DECLARE_TAG(vmeta_extract);
 
 
-#define BUF_SIZE 200
+#define BUF_SIZE 400
 #define STR_SIZE 2000
 #define RTP_DEFAULT_PORT 55004
 #define RTCP_DEFAULT_PORT 55005
@@ -90,11 +88,10 @@ struct vmeta_extract {
 	FILE *kml_file;
 	enum vmeta_frame_type type_for_kml;
 
-#ifdef BUILD_JSON
 	char *json_file_name;
 	FILE *json_file;
 	int json_pretty;
-#endif /* BUILD_JSON */
+	json_object *json_data;
 };
 
 
@@ -150,9 +147,9 @@ static int frame_extract(struct vmeta_extract *self,
 			 const char *mime_format)
 {
 	int ret = 0;
-	struct vmeta_frame meta;
+	struct vmeta_frame *meta;
 
-	ret = vmeta_frame_read(buf, &meta, mime_format);
+	ret = vmeta_frame_read(buf, mime_format, &meta);
 	if (ret < 0) {
 		ULOG_ERRNO("vmeta_frame_read", -ret);
 		return ret;
@@ -166,33 +163,36 @@ static int frame_extract(struct vmeta_extract *self,
 		if (str == NULL) {
 			ret = -ENOMEM;
 			ULOG_ERRNO("malloc(%d)", -ret, STR_SIZE);
-			return ret;
+			goto out;
 		}
 		if (self->type_for_csv == VMETA_FRAME_TYPE_NONE) {
 			self->type_for_csv =
-				(meta.type ==
+				(meta->type ==
 				 VMETA_FRAME_TYPE_V1_STREAMING_BASIC)
 					? VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED
-					: meta.type;
+					: meta->type;
 			vmeta_frame_csv_header(
 				self->type_for_csv, str, STR_SIZE);
 			fprintf(self->csv_file, "time %s\n", str);
 			str[0] = '\0';
-		} else if ((self->type_for_csv != meta.type) &&
-			   (meta.type != VMETA_FRAME_TYPE_V1_STREAMING_BASIC)) {
+		} else if ((self->type_for_csv != meta->type) &&
+			   (meta->type !=
+			    VMETA_FRAME_TYPE_V1_STREAMING_BASIC)) {
 			ULOGE("unsupported change of metadata "
 			      "type (found:%s expected:%s)\n",
-			      vmeta_frame_type_str(meta.type),
+			      vmeta_frame_type_str(meta->type),
 			      vmeta_frame_type_str(self->type_for_csv));
 			free(str);
-			return -EPROTO;
+			ret = -EPROTO;
+			goto out;
 		}
 
-		err = vmeta_frame_to_csv(&meta, str, STR_SIZE);
+		err = vmeta_frame_to_csv(meta, str, STR_SIZE);
 		if (err < 0) {
 			ULOG_ERRNO("vmeta_frame_to_csv", (int)-err);
 			free(str);
-			return err;
+			ret = err;
+			goto out;
 		}
 		len += err;
 		fprintf(self->csv_file, "%" PRIu64 " %s\n", ts, str);
@@ -205,92 +205,60 @@ static int frame_extract(struct vmeta_extract *self,
 
 		if (self->type_for_kml == VMETA_FRAME_TYPE_NONE) {
 			self->type_for_kml =
-				(meta.type ==
+				(meta->type ==
 				 VMETA_FRAME_TYPE_V1_STREAMING_BASIC)
 					? VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED
-					: meta.type;
+					: meta->type;
 			kml_header(
 				self,
 				((self->type_for_kml == VMETA_FRAME_TYPE_V2) ||
 				 (self->type_for_kml == VMETA_FRAME_TYPE_V3))
 					? 1
 					: 0);
-		} else if ((self->type_for_kml != meta.type) &&
-			   (meta.type != VMETA_FRAME_TYPE_V1_STREAMING_BASIC)) {
+		} else if ((self->type_for_kml != meta->type) &&
+			   (meta->type !=
+			    VMETA_FRAME_TYPE_V1_STREAMING_BASIC)) {
 			ULOGE("unsupported change of metadata "
 			      "type (found:%s expected:%s)\n",
-			      vmeta_frame_type_str(meta.type),
+			      vmeta_frame_type_str(meta->type),
 			      vmeta_frame_type_str(self->type_for_kml));
-			return -ENOSYS;
+			ret = -ENOSYS;
+			goto out;
 		}
 
-		switch (meta.type) {
-		case VMETA_FRAME_TYPE_V1_RECORDING:
-			loc = meta.v1_rec.location;
-			loc.altitude = meta.v1_rec.altitude;
+		ret = vmeta_frame_get_location(meta, &loc);
+		if (ret == 0)
 			kml_coord(self, &loc);
-			break;
-		case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
-			loc = meta.v1_strm_ext.location;
-			loc.altitude = meta.v1_strm_ext.altitude;
-			kml_coord(self, &loc);
-			break;
-		case VMETA_FRAME_TYPE_V2:
-			kml_coord(self, &meta.v2.base.location);
-			break;
-		case VMETA_FRAME_TYPE_V3:
-			kml_coord(self, &meta.v3.base.location);
-			break;
-		default:
-			break;
-		}
 	}
 
-#ifdef BUILD_JSON
 	/* JSON output */
-	if (self->json_file) {
+	if (self->json_file_name) {
 		json_object *jobj = json_object_new_object();
 		json_object *jobj_meta = json_object_new_object();
-		const char *jstr = NULL;
 
-		ret = vmeta_frame_to_json(&meta, jobj_meta);
+		ret = vmeta_frame_to_json(meta, jobj_meta);
 		if (ret < 0) {
 			ULOG_ERRNO("vmeta_frame_to_json", -ret);
 			json_object_put(jobj);
 			json_object_put(jobj_meta);
-			return ret;
+			goto out;
 		}
 
 		json_object_object_add(jobj, "time", json_object_new_int64(ts));
 		json_object_object_add(jobj, "metadata", jobj_meta);
 
-#	if defined(JSON_C_MAJOR_VERSION) && defined(JSON_C_MINOR_VERSION) &&  \
-		((JSON_C_MAJOR_VERSION == 0 && JSON_C_MINOR_VERSION >= 10) ||  \
-		 (JSON_C_MAJOR_VERSION > 0))
-		jstr = json_object_to_json_string_ext(
-			jobj,
-			(self->json_pretty) ? JSON_C_TO_STRING_PRETTY : 0);
-#	else
-		jstr = json_object_to_json_string(jobj);
-#	endif
-		if (jstr == NULL) {
-			ret = -EPROTO;
-			ULOG_ERRNO("json_object_to_json_string", -ret);
+		json_object *jarray;
+		if (json_object_object_get_ex(
+			    self->json_data, "frame", &jarray))
+			json_object_array_add(jarray, jobj);
+		else
 			json_object_put(jobj);
-			return ret;
-		}
-
-		fprintf(self->json_file,
-			"%s%s%s",
-			(self->is_first) ? "" : ",\n",
-			(self->json_pretty) ? "" : "  ",
-			jstr);
-		json_object_put(jobj);
 	}
-#endif /* BUILD_JSON */
 
 	self->is_first = 0;
 
+out:
+	vmeta_frame_unref(meta);
 	return ret;
 }
 
@@ -309,11 +277,9 @@ static int session_output(struct vmeta_extract *self)
 	}
 	printf("%s\n", session_meta_str);
 
-#ifdef BUILD_JSON
 	/* JSON output */
-	if (self->json_file) {
+	if (self->json_file_name) {
 		json_object *jobj = json_object_new_object();
-		const char *jstr = NULL;
 
 		ret = vmeta_session_to_json(&self->session_meta, jobj);
 		if (ret < 0) {
@@ -321,27 +287,8 @@ static int session_output(struct vmeta_extract *self)
 			json_object_put(jobj);
 			return ret;
 		}
-
-#	if defined(JSON_C_MAJOR_VERSION) && defined(JSON_C_MINOR_VERSION) &&  \
-		((JSON_C_MAJOR_VERSION == 0 && JSON_C_MINOR_VERSION >= 10) ||  \
-		 (JSON_C_MAJOR_VERSION > 0))
-		jstr = json_object_to_json_string_ext(
-			jobj,
-			(self->json_pretty) ? JSON_C_TO_STRING_PRETTY : 0);
-#	else
-		jstr = json_object_to_json_string(jobj);
-#	endif
-		if (jstr == NULL) {
-			ret = -EPROTO;
-			ULOG_ERRNO("json_object_to_json_string", -ret);
-			json_object_put(jobj);
-			return ret;
-		}
-
-		fprintf(self->json_file, "\"session\":%s\n", jstr);
-		json_object_put(jobj);
+		json_object_object_add(self->json_data, "session", jobj);
 	}
-#endif /* BUILD_JSON */
 
 	return 0;
 }
@@ -357,11 +304,11 @@ static int raw_extract(struct vmeta_extract *self)
 	uint64_t ts = 0, ts_inc = 33333;
 	char *mime_format = NULL;
 
-#ifdef BUILD_JSON
 	/* JSON output */
-	if (self->json_file)
-		fprintf(self->json_file, "\"frame\":[\n");
-#endif /* BUILD_JSON */
+	if (self->json_file_name) {
+		json_object *jarray = json_object_new_array();
+		json_object_object_add(self->json_data, "frame", jarray);
+	}
 
 	/* Open the input file */
 	in_file = fopen(self->input_file_name, "r");
@@ -425,12 +372,6 @@ static int raw_extract(struct vmeta_extract *self)
 		}
 		ts += ts_inc;
 	} while (!feof(in_file));
-
-#ifdef BUILD_JSON
-	/* JSON output */
-	if (self->json_file)
-		fprintf(self->json_file, "%s]\n", (self->is_first) ? "" : "\n");
-#endif /* BUILD_JSON */
 
 cleanup:
 	if (in_file)
@@ -516,11 +457,11 @@ static int mp4_extract(struct vmeta_extract *self)
 	if (!meta_found)
 		goto cleanup;
 
-#	ifdef BUILD_JSON
 	/* JSON output */
-	if (self->json_file)
-		fprintf(self->json_file, "\"frame\":[\n");
-#	endif /* BUILD_JSON */
+	if (self->json_file_name) {
+		json_object *jarray = json_object_new_array();
+		json_object_object_add(self->json_data, "frame", jarray);
+	}
 
 	/* Get the samples and process them */
 	i = 0;
@@ -545,12 +486,6 @@ static int mp4_extract(struct vmeta_extract *self)
 		}
 		i++;
 	} while (sample.size);
-
-#	ifdef BUILD_JSON
-	/* JSON output */
-	if (self->json_file)
-		fprintf(self->json_file, "%s]\n", (self->is_first) ? "" : "\n");
-#	endif /* BUILD_JSON */
 
 cleanup:
 	if (demux)
@@ -953,11 +888,11 @@ static int pcap_extract(struct vmeta_extract *self)
 
 	memset(&self->session_meta, 0, sizeof(self->session_meta));
 
-#	ifdef BUILD_JSON
 	/* JSON output */
-	if (self->json_file)
-		fprintf(self->json_file, "\"frame\":[\n");
-#	endif /* BUILD_JSON */
+	if (self->json_file_name) {
+		json_object *jarray = json_object_new_array();
+		json_object_object_add(self->json_data, "frame", jarray);
+	}
 
 	/* Filter and process packets */
 	err = pcap_loop(pcap, 0, pcap_packet_cb, (u_char *)self);
@@ -967,14 +902,6 @@ static int pcap_extract(struct vmeta_extract *self)
 		ret = -ENOENT;
 		goto cleanup;
 	}
-
-#	ifdef BUILD_JSON
-	/* JSON output */
-	if (self->json_file)
-		fprintf(self->json_file,
-			"%s],\n",
-			(self->is_first) ? "" : "\n");
-#	endif /* BUILD_JSON */
 
 	err = session_output(self);
 	if (err < 0)
@@ -1021,11 +948,9 @@ static void usage(char *prog_name)
 	       "-h | --help                        Print this message\n"
 	       "     --csv  <file>                 Output to CSV file\n"
 	       "     --kml  <file>                 Output to KML file\n"
-#ifdef BUILD_JSON
 	       "     --json <file>                 Output to JSON file\n"
 	       "     --pretty                      Pretty output for "
 	       "JSON file\n"
-#endif /* BUILD_JSON */
 #ifdef BUILD_LIBPCAP
 	       "     --rtp-port <port>             RTP destination port "
 	       "(.pcap files only, default is 55004)\n"
@@ -1050,13 +975,19 @@ int main(int argc, char *argv[])
 {
 	int status = EXIT_SUCCESS;
 	int idx, c, ret;
-	struct vmeta_extract self;
-	memset(&self, 0, sizeof(self));
-	self.type_for_csv = VMETA_FRAME_TYPE_NONE;
-	self.type_for_kml = VMETA_FRAME_TYPE_NONE;
-	self.is_first = 1;
-	self.rtp_port = RTP_DEFAULT_PORT;
-	self.rtcp_port = RTCP_DEFAULT_PORT;
+	struct vmeta_extract *self;
+
+	self = calloc(1, sizeof(*self));
+	if (self == NULL) {
+		ret = -ENOMEM;
+		ULOG_ERRNO("calloc", -ret);
+		exit(EXIT_FAILURE);
+	}
+	self->type_for_csv = VMETA_FRAME_TYPE_NONE;
+	self->type_for_kml = VMETA_FRAME_TYPE_NONE;
+	self->is_first = 1;
+	self->rtp_port = RTP_DEFAULT_PORT;
+	self->rtcp_port = RTCP_DEFAULT_PORT;
 
 	welcome(argv[0]);
 
@@ -1078,40 +1009,28 @@ int main(int argc, char *argv[])
 			break;
 
 		case ARGS_ID_CSV:
-			self.csv_file_name = optarg;
+			self->csv_file_name = optarg;
 			break;
 
 		case ARGS_ID_KML:
-			self.kml_file_name = optarg;
+			self->kml_file_name = optarg;
 			break;
 
 		case ARGS_ID_JSON:
-#ifdef BUILD_JSON
-			self.json_file_name = optarg;
-#else /* BUILD_JSON */
-			fprintf(stderr,
-				"JSON output is not supported; "
-				"please rebuild with json enabled\n");
-			exit(EXIT_FAILURE);
-#endif /* BUILD_JSON */
+			self->json_file_name = optarg;
+			self->json_data = json_object_new_object();
 			break;
 
 		case ARGS_ID_JSON_PRETTY:
-#ifdef JSON_C_TO_STRING_PRETTY
-			self.json_pretty = 1;
-#else /* JSON_C_TO_STRING_PRETTY */
-			fprintf(stderr,
-				"JSON_C_TO_STRING_PRETTY is not supported\n");
-			exit(EXIT_FAILURE);
-#endif /* JSON_C_TO_STRING_PRETTY */
+			self->json_pretty = 1;
 			break;
 
 		case ARGS_ID_RTP_PORT:
-			self.rtp_port = atoi(optarg);
+			self->rtp_port = atoi(optarg);
 			break;
 
 		case ARGS_ID_RTCP_PORT:
-			self.rtcp_port = atoi(optarg);
+			self->rtcp_port = atoi(optarg);
 			break;
 
 		default:
@@ -1126,57 +1045,43 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	self.input_file_name = argv[optind];
+	self->input_file_name = argv[optind];
 
-	if (self.input_file_name == NULL) {
+	if (self->input_file_name == NULL) {
 		fprintf(stderr, "no input file provided\n");
 		status = EXIT_FAILURE;
 		goto cleanup;
 	}
 
-	if (self.csv_file_name) {
-		self.csv_file = fopen(self.csv_file_name, "w");
-		if (self.csv_file == NULL) {
+	if (self->csv_file_name) {
+		self->csv_file = fopen(self->csv_file_name, "w");
+		if (self->csv_file == NULL) {
 			fprintf(stderr,
 				"failed to open CSV file '%s'\n",
-				self.csv_file_name);
+				self->csv_file_name);
 			status = EXIT_FAILURE;
 			goto cleanup;
 		}
 	}
 
-	if (self.kml_file_name) {
-		self.kml_file = fopen(self.kml_file_name, "w");
-		if (self.kml_file == NULL) {
+	if (self->kml_file_name) {
+		self->kml_file = fopen(self->kml_file_name, "w");
+		if (self->kml_file == NULL) {
 			fprintf(stderr,
 				"failed to open KML file '%s'\n",
-				self.kml_file_name);
+				self->kml_file_name);
 			status = EXIT_FAILURE;
 			goto cleanup;
 		}
 	}
 
-#ifdef BUILD_JSON
-	if (self.json_file_name) {
-		self.json_file = fopen(self.json_file_name, "w");
-		if (self.json_file == NULL) {
-			fprintf(stderr,
-				"failed to open JSON file '%s'\n",
-				self.json_file_name);
-			status = EXIT_FAILURE;
-			goto cleanup;
-		}
-		fprintf(self.json_file, "{\n");
-	}
-#endif /* BUILD_JSON */
-
-	if (!strncasecmp(self.input_file_name + strlen(self.input_file_name) -
+	if (!strncasecmp(self->input_file_name + strlen(self->input_file_name) -
 				 4,
 			 ".mp4",
 			 4)) {
 #ifdef BUILD_LIBMP4
 		/* .mp4 file input */
-		ret = mp4_extract(&self);
+		ret = mp4_extract(self);
 		if (ret != 0) {
 			status = EXIT_FAILURE;
 			goto cleanup;
@@ -1188,13 +1093,13 @@ int main(int argc, char *argv[])
 		status = EXIT_FAILURE;
 		goto cleanup;
 #endif /* BUILD_LIBMP4 */
-	} else if (!strncasecmp(self.input_file_name +
-					strlen(self.input_file_name) - 5,
+	} else if (!strncasecmp(self->input_file_name +
+					strlen(self->input_file_name) - 5,
 				".pcap",
 				5)) {
 #ifdef BUILD_LIBPCAP
 		/* .pcap file input */
-		ret = pcap_extract(&self);
+		ret = pcap_extract(self);
 		if (ret != 0) {
 			status = EXIT_FAILURE;
 			goto cleanup;
@@ -1208,27 +1113,34 @@ int main(int argc, char *argv[])
 #endif /* BUILD_LIBPCAP */
 	} else {
 		/* Raw metadata file input */
-		ret = raw_extract(&self);
+		ret = raw_extract(self);
 		if (ret != 0) {
 			status = EXIT_FAILURE;
 			goto cleanup;
 		}
 	}
+	if (self->json_file_name) {
+		ret = json_object_to_file_ext(
+			self->json_file_name,
+			self->json_data,
+			(self->json_pretty) ? JSON_C_TO_STRING_PRETTY : 0);
+		if (ret != 0) {
+			status = EXIT_FAILURE;
+			ULOG_ERRNO("json_object_to_file_ext", EPROTO);
+			goto cleanup;
+		}
+	}
 
 cleanup:
-	if (self.csv_file)
-		fclose(self.csv_file);
-	if (self.kml_file) {
-		if (!self.is_first)
-			kml_footer(&self);
-		fclose(self.kml_file);
+	if (self->csv_file)
+		fclose(self->csv_file);
+	if (self->kml_file) {
+		if (!self->is_first)
+			kml_footer(self);
+		fclose(self->kml_file);
 	}
-#ifdef BUILD_JSON
-	if (self.json_file) {
-		fprintf(self.json_file, "}\n");
-		fclose(self.json_file);
-	}
-#endif /* BUILD_JSON */
+	if (self->json_file_name)
+		json_object_put(self->json_data);
 
 	printf("%s\n", (status == EXIT_SUCCESS) ? "Done!" : "Failed!");
 	exit(status);

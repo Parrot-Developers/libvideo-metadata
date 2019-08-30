@@ -29,7 +29,9 @@
 
 #include <errno.h>
 #include <inttypes.h>
+#include <json-c/json.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,9 +43,6 @@
 #	include <arpa/inet.h>
 #endif /* !_WIN32 */
 
-#ifdef BUILD_JSON
-#	include <json-c/json.h>
-#endif /* BUILD_JSON */
 
 #define ULOG_TAG vmeta
 #include <ulog.h>
@@ -52,6 +51,7 @@
 
 #include "vmeta_csv.h"
 #include "vmeta_json.h"
+#include "vmeta_json_proto.h"
 
 
 #define VMETA_STR_PRINT(_str, _len, _max, _fmt, ...)                           \
@@ -71,6 +71,8 @@ static inline void vmeta_location_adjust_read(const struct vmeta_location *in,
 		out->latitude = NAN;
 		out->longitude = NAN;
 		out->altitude = NAN;
+		out->horizontal_accuracy = NAN;
+		out->vertical_accuracy = NAN;
 		out->sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
 	}
 }
@@ -84,6 +86,8 @@ static inline void vmeta_location_adjust_write(const struct vmeta_location *in,
 		out->latitude = 500.0;
 		out->longitude = 500.0;
 		out->altitude = 500.0;
+		out->horizontal_accuracy = 0.f;
+		out->vertical_accuracy = 0.f;
 		out->sv_count = 0;
 	}
 }
@@ -364,6 +368,34 @@ int vmeta_frame_ext_thermal_write(struct vmeta_buffer *buf,
 
 int vmeta_frame_ext_thermal_read(struct vmeta_buffer *buf,
 				 struct vmeta_frame_ext_thermal *meta);
+
+
+/**
+ * Internal API for vmeta_frame_proto
+ */
+
+
+int vmeta_frame_proto_init(struct vmeta_frame_proto **meta);
+
+
+int vmeta_frame_proto_read(struct vmeta_buffer *buf,
+			   struct vmeta_frame_proto **meta);
+
+
+int vmeta_frame_proto_write(struct vmeta_buffer *buf, struct vmeta_frame *meta);
+
+
+int vmeta_frame_proto_to_json(struct vmeta_frame *meta,
+			      struct json_object *jobj);
+
+
+int vmeta_frame_proto_destroy(struct vmeta_frame_proto *meta);
+
+
+const char *vmeta_link_type_to_str(Vmeta__LinkType val);
+
+
+const char *vmeta_link_status_to_str(Vmeta__LinkStatus val);
 
 
 #endif /* !_VMETA_PRIV_H_ */

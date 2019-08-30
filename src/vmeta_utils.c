@@ -28,6 +28,8 @@
 
 ULOG_DECLARE_TAG(vmeta);
 
+#define SINGULARITY_RADIUS (0.00001f)
+
 
 void vmeta_euler_to_quat(const struct vmeta_euler *euler,
 			 struct vmeta_quaternion *quat)
@@ -71,26 +73,53 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 	if ((quat == NULL) || (euler == NULL))
 		return;
 
-	float psi, theta, phi;
-	float qw, qx, qy, qz;
-	qw = quat->w;
-	qx = quat->x;
-	qy = quat->y;
-	qz = quat->z;
-	phi = atan2f(2 * (qw * qx + qy * qz), 1 - 2 * (qx * qx + qy * qy));
-	theta = asinf(2 * (qw * qy - qz * qx));
-	psi = atan2f(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+	if ((quat->w == 0) && (quat->x == 0) && (quat->y == 0) &&
+	    (quat->z == 0)) {
+		euler->psi = NAN;
+		euler->theta = NAN;
+		euler->phi = NAN;
+		return;
+	}
 
-	euler->phi = phi;
-	euler->theta = theta;
-	euler->psi = psi;
+	float w, x, y, z, sqw, sqx, sqy, sqz, psign, s2;
+
+	w = quat->w;
+	x = quat->x;
+	y = quat->y;
+	z = quat->z;
+	sqw = w * w;
+	sqx = x * x;
+	sqy = y * y;
+	sqz = z * z;
+	psign = -1.f;
+	s2 = 2.f * (w * y - z * x);
+
+	/* Test singularities */
+	if (s2 < (-1.f + SINGULARITY_RADIUS)) {
+		euler->psi = 0.f;
+		euler->theta = -M_PI / 2.f;
+		euler->phi = atan2f(2.f * (psign * z * y + w * x),
+				    sqw + sqy - sqz - sqx);
+	} else if (s2 > (1.f - SINGULARITY_RADIUS)) {
+		euler->psi = 0.f;
+		euler->theta = M_PI / 2.f;
+		euler->phi = atan2f(2.f * (psign * z * y + w * x),
+				    sqw + sqy - sqz - sqx);
+	} else {
+		euler->psi = -atan2f(-2.f * (w * z - psign * y * x),
+				     sqw + sqx - sqz - sqy);
+		euler->theta = asinf(s2);
+		euler->phi = atan2f(2.f * (w * x - psign * z * y),
+				    sqw + sqz - sqy - sqx);
+	}
 }
 
 
-int vmeta_frame_get_location(const struct vmeta_frame *meta,
+int vmeta_frame_get_location(struct vmeta_frame *meta,
 			     struct vmeta_location *loc)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
 	memset(loc, 0, sizeof(*loc));
@@ -117,6 +146,26 @@ int vmeta_frame_get_location(const struct vmeta_frame *meta,
 		*loc = meta->v3.base.location;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone || !tm->drone->location) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		loc->altitude = tm->drone->location->altitude;
+		loc->latitude = tm->drone->location->latitude;
+		loc->longitude = tm->drone->location->longitude;
+		loc->horizontal_accuracy =
+			tm->drone->location->horizontal_accuracy;
+		loc->vertical_accuracy = tm->drone->location->vertical_accuracy;
+		loc->sv_count = tm->drone->location->sv_count;
+		loc->valid = 1;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -127,10 +176,10 @@ int vmeta_frame_get_location(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_speed_ned(const struct vmeta_frame *meta,
-			      struct vmeta_ned *speed)
+int vmeta_frame_get_speed_ned(struct vmeta_frame *meta, struct vmeta_ned *speed)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(speed == NULL, EINVAL);
 	memset(speed, 0, sizeof(*speed));
@@ -163,6 +212,21 @@ int vmeta_frame_get_speed_ned(const struct vmeta_frame *meta,
 		*speed = meta->v3.base.speed;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone || !tm->drone->speed) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		speed->north = tm->drone->speed->north;
+		speed->east = tm->drone->speed->east;
+		speed->down = tm->drone->speed->down;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -173,7 +237,7 @@ int vmeta_frame_get_speed_ned(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_air_speed(const struct vmeta_frame *meta, float *speed)
+int vmeta_frame_get_air_speed(struct vmeta_frame *meta, float *speed)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -196,6 +260,10 @@ int vmeta_frame_get_air_speed(const struct vmeta_frame *meta, float *speed)
 		*speed = meta->v3.base.air_speed;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = -ENOENT;
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -206,10 +274,10 @@ int vmeta_frame_get_air_speed(const struct vmeta_frame *meta, float *speed)
 }
 
 
-int vmeta_frame_get_ground_distance(const struct vmeta_frame *meta,
-				    double *dist)
+int vmeta_frame_get_ground_distance(struct vmeta_frame *meta, double *dist)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(dist == NULL, EINVAL);
 	*dist = 0.;
@@ -236,6 +304,19 @@ int vmeta_frame_get_ground_distance(const struct vmeta_frame *meta,
 		*dist = meta->v3.base.ground_distance;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*dist = tm->drone->ground_distance;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -246,10 +327,12 @@ int vmeta_frame_get_ground_distance(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_drone_euler(const struct vmeta_frame *meta,
+int vmeta_frame_get_drone_euler(struct vmeta_frame *meta,
 				struct vmeta_euler *euler)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	struct vmeta_quaternion tmp;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(euler == NULL, EINVAL);
 	memset(euler, 0, sizeof(*euler));
@@ -279,6 +362,23 @@ int vmeta_frame_get_drone_euler(const struct vmeta_frame *meta,
 		vmeta_quat_to_euler(&meta->v3.base.drone_quat, euler);
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone || !tm->drone->quat) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		tmp.w = tm->drone->quat->w;
+		tmp.x = tm->drone->quat->x;
+		tmp.y = tm->drone->quat->y;
+		tmp.z = tm->drone->quat->z;
+		vmeta_quat_to_euler(&tmp, euler);
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -289,10 +389,11 @@ int vmeta_frame_get_drone_euler(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_drone_quat(const struct vmeta_frame *meta,
+int vmeta_frame_get_drone_quat(struct vmeta_frame *meta,
 			       struct vmeta_quaternion *quat)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(quat == NULL, EINVAL);
 	memset(quat, 0, sizeof(*quat));
@@ -322,6 +423,22 @@ int vmeta_frame_get_drone_quat(const struct vmeta_frame *meta,
 		*quat = meta->v3.base.drone_quat;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone || !tm->drone->quat) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		quat->w = tm->drone->quat->w;
+		quat->x = tm->drone->quat->x;
+		quat->y = tm->drone->quat->y;
+		quat->z = tm->drone->quat->z;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -332,10 +449,12 @@ int vmeta_frame_get_drone_quat(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_frame_euler(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_euler(struct vmeta_frame *meta,
 				struct vmeta_euler *euler)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	struct vmeta_quaternion tmp;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(euler == NULL, EINVAL);
 	memset(euler, 0, sizeof(*euler));
@@ -365,6 +484,23 @@ int vmeta_frame_get_frame_euler(const struct vmeta_frame *meta,
 		vmeta_quat_to_euler(&meta->v3.base.frame_quat, euler);
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || !tm->camera->quat) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		tmp.w = tm->camera->quat->w;
+		tmp.x = tm->camera->quat->x;
+		tmp.y = tm->camera->quat->y;
+		tmp.z = tm->camera->quat->z;
+		vmeta_quat_to_euler(&tmp, euler);
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -375,10 +511,11 @@ int vmeta_frame_get_frame_euler(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_frame_quat(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_quat(struct vmeta_frame *meta,
 			       struct vmeta_quaternion *quat)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(quat == NULL, EINVAL);
 	memset(quat, 0, sizeof(*quat));
@@ -408,6 +545,22 @@ int vmeta_frame_get_frame_quat(const struct vmeta_frame *meta,
 		*quat = meta->v3.base.frame_quat;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || !tm->camera->quat) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		quat->w = tm->camera->quat->w;
+		quat->x = tm->camera->quat->x;
+		quat->y = tm->camera->quat->y;
+		quat->z = tm->camera->quat->z;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -418,10 +571,12 @@ int vmeta_frame_get_frame_quat(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_frame_base_euler(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_base_euler(struct vmeta_frame *meta,
 				     struct vmeta_euler *euler)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	struct vmeta_quaternion tmp;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(euler == NULL, EINVAL);
 	memset(euler, 0, sizeof(*euler));
@@ -439,6 +594,23 @@ int vmeta_frame_get_frame_base_euler(const struct vmeta_frame *meta,
 		vmeta_quat_to_euler(&meta->v3.base.frame_base_quat, euler);
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || !tm->camera->base_quat) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		tmp.w = tm->camera->base_quat->w;
+		tmp.x = tm->camera->base_quat->x;
+		tmp.y = tm->camera->base_quat->y;
+		tmp.z = tm->camera->base_quat->z;
+		vmeta_quat_to_euler(&tmp, euler);
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -449,10 +621,11 @@ int vmeta_frame_get_frame_base_euler(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_frame_base_quat(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_base_quat(struct vmeta_frame *meta,
 				    struct vmeta_quaternion *quat)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(quat == NULL, EINVAL);
 	memset(quat, 0, sizeof(*quat));
@@ -470,6 +643,22 @@ int vmeta_frame_get_frame_base_quat(const struct vmeta_frame *meta,
 		*quat = meta->v3.base.frame_base_quat;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || !tm->camera->base_quat) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		quat->w = tm->camera->base_quat->w;
+		quat->x = tm->camera->base_quat->x;
+		quat->y = tm->camera->base_quat->y;
+		quat->z = tm->camera->base_quat->z;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -480,10 +669,11 @@ int vmeta_frame_get_frame_base_quat(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_frame_timestamp(const struct vmeta_frame *meta,
+int vmeta_frame_get_frame_timestamp(struct vmeta_frame *meta,
 				    uint64_t *timestamp)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(timestamp == NULL, EINVAL);
 	*timestamp = 0;
@@ -513,6 +703,19 @@ int vmeta_frame_get_frame_timestamp(const struct vmeta_frame *meta,
 			res = -ENOENT;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*timestamp = tm->camera->timestamp;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -523,7 +726,7 @@ int vmeta_frame_get_frame_timestamp(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_camera_pan(const struct vmeta_frame *meta, float *pan)
+int vmeta_frame_get_camera_pan(struct vmeta_frame *meta, float *pan)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -533,6 +736,7 @@ int vmeta_frame_get_camera_pan(const struct vmeta_frame *meta, float *pan)
 	switch (meta->type) {
 	case VMETA_FRAME_TYPE_NONE:
 	case VMETA_FRAME_TYPE_V3:
+	case VMETA_FRAME_TYPE_PROTO:
 		res = -ENOENT;
 		break;
 
@@ -562,7 +766,7 @@ int vmeta_frame_get_camera_pan(const struct vmeta_frame *meta, float *pan)
 }
 
 
-int vmeta_frame_get_camera_tilt(const struct vmeta_frame *meta, float *tilt)
+int vmeta_frame_get_camera_tilt(struct vmeta_frame *meta, float *tilt)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -572,6 +776,7 @@ int vmeta_frame_get_camera_tilt(const struct vmeta_frame *meta, float *tilt)
 	switch (meta->type) {
 	case VMETA_FRAME_TYPE_NONE:
 	case VMETA_FRAME_TYPE_V3:
+	case VMETA_FRAME_TYPE_PROTO:
 		res = -ENOENT;
 		break;
 
@@ -601,9 +806,10 @@ int vmeta_frame_get_camera_tilt(const struct vmeta_frame *meta, float *tilt)
 }
 
 
-int vmeta_frame_get_exposure_time(const struct vmeta_frame *meta, float *exp)
+int vmeta_frame_get_exposure_time(struct vmeta_frame *meta, float *exp)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(exp == NULL, EINVAL);
 	*exp = 0.;
@@ -633,6 +839,19 @@ int vmeta_frame_get_exposure_time(const struct vmeta_frame *meta, float *exp)
 		*exp = meta->v3.base.exposure_time;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*exp = tm->camera->exposure_time;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -643,9 +862,10 @@ int vmeta_frame_get_exposure_time(const struct vmeta_frame *meta, float *exp)
 }
 
 
-int vmeta_frame_get_gain(const struct vmeta_frame *meta, uint16_t *gain)
+int vmeta_frame_get_gain(struct vmeta_frame *meta, uint16_t *gain)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(gain == NULL, EINVAL);
 	*gain = 0;
@@ -675,6 +895,19 @@ int vmeta_frame_get_gain(const struct vmeta_frame *meta, uint16_t *gain)
 		*gain = meta->v3.base.gain;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*gain = tm->camera->iso_gain;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -685,9 +918,10 @@ int vmeta_frame_get_gain(const struct vmeta_frame *meta, uint16_t *gain)
 }
 
 
-int vmeta_frame_get_awb_r_gain(const struct vmeta_frame *meta, float *gain)
+int vmeta_frame_get_awb_r_gain(struct vmeta_frame *meta, float *gain)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(gain == NULL, EINVAL);
 	*gain = 0.;
@@ -705,6 +939,19 @@ int vmeta_frame_get_awb_r_gain(const struct vmeta_frame *meta, float *gain)
 		*gain = meta->v3.base.awb_r_gain;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*gain = tm->camera->awb_r_gain;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -715,9 +962,10 @@ int vmeta_frame_get_awb_r_gain(const struct vmeta_frame *meta, float *gain)
 }
 
 
-int vmeta_frame_get_awb_b_gain(const struct vmeta_frame *meta, float *gain)
+int vmeta_frame_get_awb_b_gain(struct vmeta_frame *meta, float *gain)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(gain == NULL, EINVAL);
 	*gain = 0.;
@@ -735,6 +983,19 @@ int vmeta_frame_get_awb_b_gain(const struct vmeta_frame *meta, float *gain)
 		*gain = meta->v3.base.awb_b_gain;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*gain = tm->camera->awb_b_gain;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -745,9 +1006,10 @@ int vmeta_frame_get_awb_b_gain(const struct vmeta_frame *meta, float *gain)
 }
 
 
-int vmeta_frame_get_picture_h_fov(const struct vmeta_frame *meta, float *fov)
+int vmeta_frame_get_picture_h_fov(struct vmeta_frame *meta, float *fov)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(fov == NULL, EINVAL);
 	*fov = 0.;
@@ -765,6 +1027,19 @@ int vmeta_frame_get_picture_h_fov(const struct vmeta_frame *meta, float *fov)
 		*fov = meta->v3.base.picture_hfov;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*fov = tm->camera->hfov;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -775,9 +1050,10 @@ int vmeta_frame_get_picture_h_fov(const struct vmeta_frame *meta, float *fov)
 }
 
 
-int vmeta_frame_get_picture_v_fov(const struct vmeta_frame *meta, float *fov)
+int vmeta_frame_get_picture_v_fov(struct vmeta_frame *meta, float *fov)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(fov == NULL, EINVAL);
 	*fov = 0.;
@@ -795,6 +1071,19 @@ int vmeta_frame_get_picture_v_fov(const struct vmeta_frame *meta, float *fov)
 		*fov = meta->v3.base.picture_vfov;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*fov = tm->camera->vfov;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -805,10 +1094,10 @@ int vmeta_frame_get_picture_v_fov(const struct vmeta_frame *meta, float *fov)
 }
 
 
-int vmeta_frame_get_link_goodput(const struct vmeta_frame *meta,
-				 uint32_t *goodput)
+int vmeta_frame_get_link_goodput(struct vmeta_frame *meta, uint32_t *goodput)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(goodput == NULL, EINVAL);
 	*goodput = 0;
@@ -826,6 +1115,28 @@ int vmeta_frame_get_link_goodput(const struct vmeta_frame *meta,
 		*goodput = meta->v3.base.link_goodput;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (tm->n_links == 0) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		res = -ENOENT;
+		for (size_t i = 0; i < tm->n_links; i++) {
+			Vmeta__LinkMetadata *link = tm->links[i];
+			if (link->protocol_case !=
+			    VMETA__LINK_METADATA__PROTOCOL_WIFI)
+				continue;
+			res = 0;
+			*goodput = link->wifi->goodput;
+			break;
+		}
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -836,10 +1147,10 @@ int vmeta_frame_get_link_goodput(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_link_quality(const struct vmeta_frame *meta,
-				 uint8_t *quality)
+int vmeta_frame_get_link_quality(struct vmeta_frame *meta, uint8_t *quality)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(quality == NULL, EINVAL);
 	*quality = 0;
@@ -857,6 +1168,28 @@ int vmeta_frame_get_link_quality(const struct vmeta_frame *meta,
 		*quality = meta->v3.base.link_quality;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (tm->n_links == 0) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		res = -ENOENT;
+		for (size_t i = 0; i < tm->n_links; i++) {
+			Vmeta__LinkMetadata *link = tm->links[i];
+			if (link->protocol_case !=
+			    VMETA__LINK_METADATA__PROTOCOL_WIFI)
+				continue;
+			res = 0;
+			*quality = link->wifi->quality;
+			break;
+		}
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -867,9 +1200,10 @@ int vmeta_frame_get_link_quality(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_wifi_rssi(const struct vmeta_frame *meta, int8_t *rssi)
+int vmeta_frame_get_wifi_rssi(struct vmeta_frame *meta, int8_t *rssi)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(rssi == NULL, EINVAL);
 	*rssi = 0;
@@ -899,6 +1233,28 @@ int vmeta_frame_get_wifi_rssi(const struct vmeta_frame *meta, int8_t *rssi)
 		*rssi = meta->v3.base.wifi_rssi;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (tm->n_links == 0) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		res = -ENOENT;
+		for (size_t i = 0; i < tm->n_links; i++) {
+			Vmeta__LinkMetadata *link = tm->links[i];
+			if (link->protocol_case !=
+			    VMETA__LINK_METADATA__PROTOCOL_WIFI)
+				continue;
+			res = 0;
+			*rssi = link->wifi->rssi;
+			break;
+		}
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -909,10 +1265,10 @@ int vmeta_frame_get_wifi_rssi(const struct vmeta_frame *meta, int8_t *rssi)
 }
 
 
-int vmeta_frame_get_battery_pencentage(const struct vmeta_frame *meta,
-				       uint8_t *bat)
+int vmeta_frame_get_battery_percentage(struct vmeta_frame *meta, uint8_t *bat)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(bat == NULL, EINVAL);
 	*bat = 255;
@@ -942,6 +1298,19 @@ int vmeta_frame_get_battery_pencentage(const struct vmeta_frame *meta,
 		*bat = meta->v3.base.battery_percentage;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*bat = tm->drone->battery_percentage;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -952,10 +1321,11 @@ int vmeta_frame_get_battery_pencentage(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_flying_state(const struct vmeta_frame *meta,
+int vmeta_frame_get_flying_state(struct vmeta_frame *meta,
 				 enum vmeta_flying_state *state)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(state == NULL, EINVAL);
 	*state = VMETA_FLYING_STATE_LANDED;
@@ -982,6 +1352,20 @@ int vmeta_frame_get_flying_state(const struct vmeta_frame *meta,
 		*state = meta->v3.base.state;
 		break;
 
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*state = vmeta_frame_flying_state_proto_to_vmeta(
+			tm->drone->flying_state);
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
 	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
@@ -992,7 +1376,7 @@ int vmeta_frame_get_flying_state(const struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_piloting_mode(const struct vmeta_frame *meta,
+int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 				  enum vmeta_piloting_mode *mode)
 {
 	int res = 0;
@@ -1003,6 +1387,7 @@ int vmeta_frame_get_piloting_mode(const struct vmeta_frame *meta,
 	switch (meta->type) {
 	case VMETA_FRAME_TYPE_NONE:
 	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_PROTO:
 		res = -ENOENT;
 		break;
 
@@ -1029,4 +1414,228 @@ int vmeta_frame_get_piloting_mode(const struct vmeta_frame *meta,
 	}
 
 	return res;
+}
+
+
+enum vmeta_camera_type vmeta_camera_type_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_CAMERA_TYPE_UNKNOWN;
+
+	if (strcasecmp(str, "front") == 0) {
+		return VMETA_CAMERA_TYPE_FRONT;
+	} else if (strcasecmp(str, "front-stereo-left") == 0) {
+		return VMETA_CAMERA_TYPE_FRONT_STEREO_LEFT;
+	} else if (strcasecmp(str, "front-stereo-right") == 0) {
+		return VMETA_CAMERA_TYPE_FRONT_STEREO_RIGHT;
+	} else if (strcasecmp(str, "vertical") == 0) {
+		return VMETA_CAMERA_TYPE_VERTICAL;
+	} else if (strcasecmp(str, "disparity") == 0) {
+		return VMETA_CAMERA_TYPE_DISPARITY;
+	} else {
+		ULOGW("%s: unknown camera type '%s'", __func__, str);
+		return VMETA_CAMERA_TYPE_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_camera_type_to_str(enum vmeta_camera_type val)
+{
+	switch (val) {
+	case VMETA_CAMERA_TYPE_FRONT:
+		return "front";
+	case VMETA_CAMERA_TYPE_FRONT_STEREO_LEFT:
+		return "front-stereo-left";
+	case VMETA_CAMERA_TYPE_FRONT_STEREO_RIGHT:
+		return "front-stereo-right";
+	case VMETA_CAMERA_TYPE_VERTICAL:
+		return "vertical";
+	case VMETA_CAMERA_TYPE_DISPARITY:
+		return "disparity";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_video_mode vmeta_video_mode_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_VIDEO_MODE_UNKNOWN;
+
+	if (strcasecmp(str, "standard") == 0) {
+		return VMETA_VIDEO_MODE_STANDARD;
+	} else if (strcasecmp(str, "hyperlapse") == 0) {
+		return VMETA_VIDEO_MODE_HYPERLAPSE;
+	} else if (strcasecmp(str, "slowmotion") == 0) {
+		return VMETA_VIDEO_MODE_SLOWMOTION;
+	} else {
+		ULOGW("%s: unknown video mode '%s'", __func__, str);
+		return VMETA_VIDEO_MODE_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_video_mode_to_str(enum vmeta_video_mode val)
+{
+	switch (val) {
+	case VMETA_VIDEO_MODE_STANDARD:
+		return "standard";
+	case VMETA_VIDEO_MODE_HYPERLAPSE:
+		return "hyperlapse";
+	case VMETA_VIDEO_MODE_SLOWMOTION:
+		return "slowmotion";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_video_stop_reason vmeta_video_stop_reason_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_VIDEO_STOP_REASON_UNKNOWN;
+
+	if (strcasecmp(str, "user") == 0) {
+		return VMETA_VIDEO_STOP_REASON_USER;
+	} else if (strcasecmp(str, "reconfiguration") == 0) {
+		return VMETA_VIDEO_STOP_REASON_RECONFIGURATION;
+	} else if (strcasecmp(str, "poor-storage-perf") == 0) {
+		return VMETA_VIDEO_STOP_REASON_POOR_STORAGE_PERF;
+	} else if (strcasecmp(str, "storage-full") == 0) {
+		return VMETA_VIDEO_STOP_REASON_STORAGE_FULL;
+	} else if (strcasecmp(str, "recovery") == 0) {
+		return VMETA_VIDEO_STOP_REASON_RECOVERY;
+	} else if (strcasecmp(str, "end-of-stream") == 0) {
+		return VMETA_VIDEO_STOP_REASON_END_OF_STREAM;
+	} else if (strcasecmp(str, "shutdown") == 0) {
+		return VMETA_VIDEO_STOP_REASON_SHUTDOWN;
+	} else {
+		ULOGW("%s: unknown stop reason '%s'", __func__, str);
+		return VMETA_VIDEO_STOP_REASON_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_video_stop_reason_to_str(enum vmeta_video_stop_reason val)
+{
+	switch (val) {
+	case VMETA_VIDEO_STOP_REASON_USER:
+		return "user";
+	case VMETA_VIDEO_STOP_REASON_RECONFIGURATION:
+		return "reconfiguration";
+	case VMETA_VIDEO_STOP_REASON_POOR_STORAGE_PERF:
+		return "poor-storage-perf";
+	case VMETA_VIDEO_STOP_REASON_STORAGE_FULL:
+		return "storage-full";
+	case VMETA_VIDEO_STOP_REASON_RECOVERY:
+		return "recovery";
+	case VMETA_VIDEO_STOP_REASON_END_OF_STREAM:
+		return "end-of-stream";
+	case VMETA_VIDEO_STOP_REASON_SHUTDOWN:
+		return "shutdown";
+	default:
+		return "unknown";
+	}
+}
+
+
+const char *vmeta_link_type_to_str(Vmeta__LinkType val)
+{
+	switch (val) {
+	case VMETA__LINK_TYPE__LINK_TYPE_LO:
+		return "lo";
+	case VMETA__LINK_TYPE__LINK_TYPE_LAN:
+		return "lan";
+	case VMETA__LINK_TYPE__LINK_TYPE_WLAN:
+		return "wlan";
+	case VMETA__LINK_TYPE__LINK_TYPE_CELLULAR:
+		return "cellular";
+	case VMETA__LINK_TYPE__LINK_TYPE_UNKNOWN:
+	default:
+		return "unknown";
+	}
+}
+
+
+const char *vmeta_link_status_to_str(Vmeta__LinkStatus val)
+{
+	switch (val) {
+	case VMETA__LINK_STATUS__LINK_STATUS_DOWN:
+		return "down";
+	case VMETA__LINK_STATUS__LINK_STATUS_UP:
+		return "up";
+	case VMETA__LINK_STATUS__LINK_STATUS_RUNNING:
+		return "running";
+	case VMETA__LINK_STATUS__LINK_STATUS_READY:
+		return "ready";
+	case VMETA__LINK_STATUS__LINK_STATUS_CONNECTING:
+		return "connecting";
+	case VMETA__LINK_STATUS__LINK_STATUS_ERROR:
+		return "error";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_dynamic_range vmeta_dynamic_range_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_DYNAMIC_RANGE_UNKNOWN;
+
+	if (strcasecmp(str, "sdr") == 0) {
+		return VMETA_DYNAMIC_RANGE_SDR;
+	} else if (strcasecmp(str, "hdr8") == 0) {
+		return VMETA_DYNAMIC_RANGE_HDR8;
+	} else if (strcasecmp(str, "hdr10") == 0) {
+		return VMETA_DYNAMIC_RANGE_HDR10;
+	} else {
+		ULOGW("%s: unknown dynamic range '%s'", __func__, str);
+		return VMETA_DYNAMIC_RANGE_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_dynamic_range_to_str(enum vmeta_dynamic_range val)
+{
+	switch (val) {
+	case VMETA_DYNAMIC_RANGE_SDR:
+		return "sdr";
+	case VMETA_DYNAMIC_RANGE_HDR8:
+		return "hdr8";
+	case VMETA_DYNAMIC_RANGE_HDR10:
+		return "hdr10";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_tone_mapping vmeta_tone_mapping_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_TONE_MAPPING_UNKNOWN;
+
+	if (strcasecmp(str, "standard") == 0) {
+		return VMETA_TONE_MAPPING_STANDARD;
+	} else if (strcasecmp(str, "p-log") == 0) {
+		return VMETA_TONE_MAPPING_P_LOG;
+	} else {
+		ULOGW("%s: unknown tone mapping '%s'", __func__, str);
+		return VMETA_TONE_MAPPING_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_tone_mapping_to_str(enum vmeta_tone_mapping val)
+{
+	switch (val) {
+	case VMETA_TONE_MAPPING_STANDARD:
+		return "standard";
+	case VMETA_TONE_MAPPING_P_LOG:
+		return "p-log";
+	default:
+		return "unknown";
+	}
 }

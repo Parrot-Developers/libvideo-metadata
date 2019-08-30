@@ -27,8 +27,7 @@
 #include "vmeta_priv.h"
 
 /* clang-format off */
-/* codecheck_ignore[COMPLEX_MACRO] */
-#define CHECK(_x) if ((res = (_x)) < 0) goto out
+#define CHECK(_x) do { if ((res = (_x)) < 0) goto out; } while (0)
 /* clang-format on */
 
 
@@ -155,8 +154,6 @@ out:
 }
 
 
-#ifdef BUILD_JSON
-
 int vmeta_frame_v1_streaming_basic_to_json(
 	const struct vmeta_frame_v1_streaming_basic *meta,
 	struct json_object *jobj)
@@ -175,17 +172,6 @@ int vmeta_frame_v1_streaming_basic_to_json(
 
 	return 0;
 }
-
-#else /* BUILD_JSON */
-
-int vmeta_frame_v1_streaming_basic_to_json(
-	const struct vmeta_frame_v1_streaming_basic *meta,
-	struct json_object *jobj)
-{
-	return -ENOSYS;
-}
-
-#endif /* BUILD_JSON */
 
 
 size_t vmeta_frame_v1_streaming_basic_to_csv(
@@ -412,8 +398,6 @@ out:
 }
 
 
-#ifdef BUILD_JSON
-
 int vmeta_frame_v1_streaming_extended_to_json(
 	const struct vmeta_frame_v1_streaming_extended *meta,
 	struct json_object *jobj)
@@ -442,17 +426,6 @@ int vmeta_frame_v1_streaming_extended_to_json(
 
 	return 0;
 }
-
-#else /* BUILD_JSON */
-
-int vmeta_frame_v1_streaming_extended_to_json(
-	const struct vmeta_frame_v1_streaming_extended *meta,
-	struct json_object *jobj)
-{
-	return -ENOSYS;
-}
-
-#endif /* BUILD_JSON */
 
 
 size_t vmeta_frame_v1_streaming_extended_to_csv(
@@ -514,15 +487,16 @@ size_t vmeta_frame_v1_streaming_extended_csv_header(char *str, size_t maxlen)
 		str + len,
 		len,
 		maxlen - len,
-		"drone_attitude_yaw drone_attitude_pitch drone_attitude_roll"
-		" location_valid location_latitude location_longitude"
-		" location_altitude location_sv_count"
-		" altitude distance_from_home"
-		" speed_x speed_y speed_z"
-		" frame_quat_w frame_quat_x frame_quat_y frame_quat_z"
-		" camera_pan camera_tilt exposure_time gain"
-		" wifi_rssi battery_percentage"
-		" binning animation state mode");
+		"drone_attitude_yaw drone_attitude_pitch drone_attitude_roll "
+		"location_valid location_latitude location_longitude "
+		"location_altitude location_horizontal_accuracy "
+		"location_vertical_accuracy location_sv_count "
+		"altitude distance_from_home "
+		"speed_x speed_y speed_z "
+		"frame_quat_w frame_quat_x frame_quat_y frame_quat_z "
+		"camera_pan camera_tilt exposure_time gain "
+		"wifi_rssi battery_percentage "
+		"binning animation state mode");
 
 	return len;
 }
@@ -636,8 +610,6 @@ out:
 }
 
 
-#ifdef BUILD_JSON
-
 int vmeta_frame_v1_recording_to_json(
 	const struct vmeta_frame_v1_recording *meta,
 	struct json_object *jobj)
@@ -667,17 +639,6 @@ int vmeta_frame_v1_recording_to_json(
 
 	return 0;
 }
-
-#else /* BUILD_JSON */
-
-int vmeta_frame_v1_recording_to_json(
-	const struct vmeta_frame_v1_recording *meta,
-	struct json_object *jobj)
-{
-	return -ENOSYS;
-}
-
-#endif /* BUILD_JSON */
 
 
 size_t
@@ -743,16 +704,17 @@ size_t vmeta_frame_v1_recording_csv_header(char *str, size_t maxlen)
 		str + len,
 		len,
 		maxlen - len,
-		"drone_attitude_yaw drone_attitude_pitch drone_attitude_roll"
-		" location_valid location_latitude location_longitude"
-		" location_altitude location_sv_count"
-		" altitude distance_from_home"
-		" speed_x speed_y speed_z"
-		" frame_timestamp"
-		" frame_quat_w frame_quat_x frame_quat_y frame_quat_z"
-		" camera_pan camera_tilt exposure_time gain"
-		" wifi_rssi battery_percentage"
-		" binning animation state mode");
+		"drone_attitude_yaw drone_attitude_pitch drone_attitude_roll "
+		"location_valid location_latitude location_longitude "
+		"location_altitude location_horizontal_accuracy "
+		"location_vertical_accuracy location_sv_count "
+		"altitude distance_from_home "
+		"speed_x speed_y speed_z "
+		"frame_timestamp "
+		"frame_quat_w frame_quat_x frame_quat_y frame_quat_z "
+		"camera_pan camera_tilt exposure_time gain "
+		"wifi_rssi battery_percentage "
+		"binning animation state mode");
 
 	return len;
 }
