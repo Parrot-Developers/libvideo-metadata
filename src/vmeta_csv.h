@@ -48,4 +48,9 @@ size_t vmeta_csv_add_xyz(char *str, size_t maxlen, const struct vmeta_xyz *val);
 size_t vmeta_csv_add_ned(char *str, size_t maxlen, const struct vmeta_ned *val);
 
 
+size_t vmeta_csv_add_thermal_spot(char *str,
+				  size_t maxlen,
+				  const struct vmeta_thermal_spot *val);
+
+
 #endif /* !_VMETA_CSV_H_ */

@@ -358,4 +358,12 @@ int vmeta_frame_ext_automation_read(struct vmeta_buffer *buf,
 				    struct vmeta_frame_ext_automation *meta);
 
 
+int vmeta_frame_ext_thermal_write(struct vmeta_buffer *buf,
+				  const struct vmeta_frame_ext_thermal *meta);
+
+
+int vmeta_frame_ext_thermal_read(struct vmeta_buffer *buf,
+				 struct vmeta_frame_ext_thermal *meta);
+
+
 #endif /* !_VMETA_PRIV_H_ */

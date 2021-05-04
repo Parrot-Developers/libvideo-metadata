@@ -123,3 +123,27 @@ size_t vmeta_csv_add_ned(char *str, size_t maxlen, const struct vmeta_ned *val)
 
 	return len;
 }
+
+
+size_t vmeta_csv_add_thermal_spot(char *str,
+				  size_t maxlen,
+				  const struct vmeta_thermal_spot *val)
+{
+	size_t len = 0;
+
+	if (val->valid) {
+		VMETA_STR_PRINT(str,
+				len,
+				maxlen,
+				"%d %.5f %.5f %.5f",
+				val->valid,
+				val->x,
+				val->y,
+				val->temp);
+	} else {
+		VMETA_STR_PRINT(
+			str, len, maxlen, "%d %.5f %.5f %.5f", 0, 0., 0., 0.);
+	}
+
+	return len;
+}

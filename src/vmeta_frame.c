@@ -140,6 +140,21 @@ const char *vmeta_automation_anim_str(enum vmeta_automation_anim val)
 }
 
 
+const char *vmeta_thermal_calib_state_str(enum vmeta_thermal_calib_state val)
+{
+	switch (val) {
+	case VMETA_THERMAL_CALIB_STATE_DONE:
+		return "DONE";
+	case VMETA_THERMAL_CALIB_STATE_REQUESTED:
+		return "REQUESTED";
+	case VMETA_THERMAL_CALIB_STATE_IN_PROGRESS:
+		return "IN_PROGRESS";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+
 const char *vmeta_frame_type_str(enum vmeta_frame_type val)
 {
 	switch (val) {
@@ -808,6 +823,122 @@ int vmeta_frame_ext_automation_read(struct vmeta_buffer *buf,
 	vmeta_location_adjust_read(&flight_destination,
 				   &meta->flight_destination);
 	meta->flight_destination.sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
+
+	/* Make sure we read the correct number of bytes */
+	if (buf->pos - start != (size_t)len * 4 + 4) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: bad length: %zu (%u)",
+		      buf->pos - start,
+		      len * 4 + 4);
+		goto out;
+	}
+
+out:
+	return res;
+}
+
+
+int vmeta_frame_ext_thermal_write(struct vmeta_buffer *buf,
+				  const struct vmeta_frame_ext_thermal *meta)
+{
+	int res = 0;
+	size_t start = 0, end = 0;
+	uint16_t len = 0;
+	uint8_t flags = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+
+	/* Remember start position */
+	start = buf->pos;
+
+	/* Write fields */
+	CHECK(vmeta_write_u16(buf, 0)); /* temp value, updated later */
+	CHECK(vmeta_write_u16(buf, 0)); /* temp value, updated later */
+	CHECK(vmeta_write_f32_i16(buf, meta->min.x, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->min.y, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->min.temp, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->max.x, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->max.y, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->max.temp, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->probe.x, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->probe.y, 5));
+	CHECK(vmeta_write_f32_i16(buf, meta->probe.temp, 5));
+	CHECK(vmeta_write_u8(buf, (uint8_t)meta->calib_state));
+
+	flags = meta->min.valid | (meta->max.valid << 1) |
+		(meta->probe.valid << 2);
+	CHECK(vmeta_write_u8(buf, flags));
+
+	/* Check for correct alignment */
+	if ((buf->pos - start) % 4 != 0) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: buffer not aligned: %zu",
+		      buf->pos - start);
+		goto out;
+	}
+
+	/* Write id and length */
+	end = buf->pos;
+	len = (buf->pos - start - 4) / 4;
+	buf->pos = start;
+	CHECK(vmeta_write_u16(buf, VMETA_FRAME_EXT_THERMAL_ID));
+	CHECK(vmeta_write_u16(buf, len));
+	buf->pos = end;
+
+out:
+	return res;
+}
+
+
+int vmeta_frame_ext_thermal_read(struct vmeta_buffer *buf,
+				 struct vmeta_frame_ext_thermal *meta)
+{
+	int res = 0;
+	size_t start = 0;
+	uint16_t id = 0, len = 0;
+	uint8_t flags = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+
+	/* Get buffer start */
+	start = buf->pos;
+
+	/* Read Id */
+	CHECK(vmeta_read_u16(buf, &id));
+	if (id != VMETA_FRAME_EXT_THERMAL_ID) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: bad id: 0x%04x (0x%04x)",
+		      id,
+		      VMETA_FRAME_EXT_THERMAL_ID);
+		goto out;
+	}
+
+	/* Read len */
+	CHECK(vmeta_read_u16(buf, &len));
+	if (buf->len - start < (size_t)len * 4 + 4) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: bad length: %zu (%u)",
+		      buf->len - start,
+		      len * 4 + 4);
+		goto out;
+	}
+
+	/* Read fields */
+	memset(meta, 0, sizeof(*meta));
+	CHECK(vmeta_read_f32_i16(buf, &meta->min.x, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->min.y, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->min.temp, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->max.x, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->max.y, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->max.temp, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->probe.x, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->probe.y, 5));
+	CHECK(vmeta_read_f32_i16(buf, &meta->probe.temp, 5));
+	CHECK(vmeta_read_u8(buf, (uint8_t *)&meta->calib_state));
+	CHECK(vmeta_read_u8(buf, &flags));
+	meta->min.valid = flags & 0x1;
+	meta->max.valid = (flags >> 1) & 0x1;
+	meta->probe.valid = (flags >> 2) & 0x1;
 
 	/* Make sure we read the correct number of bytes */
 	if (buf->pos - start != (size_t)len * 4 + 4) {

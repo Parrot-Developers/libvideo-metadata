@@ -44,6 +44,10 @@
 #define VMETA_FRAME_EXT_AUTOMATION_ID 0x4533
 
 
+/* "Parrot Video Metadata" thermal extension identifier */
+#define VMETA_FRAME_EXT_THERMAL_ID 0x4534
+
+
 /* Flying states */
 enum vmeta_flying_state {
 	/* Landed state */
@@ -172,6 +176,19 @@ enum vmeta_automation_anim {
 };
 
 
+/* Thermal calibration state. */
+enum vmeta_thermal_calib_state {
+	/* Thermal calibration done. */
+	VMETA_THERMAL_CALIB_STATE_DONE = 0,
+
+	/* Thermal calibration requested. */
+	VMETA_THERMAL_CALIB_STATE_REQUESTED,
+
+	/* Thermal calibration in progress. */
+	VMETA_THERMAL_CALIB_STATE_IN_PROGRESS,
+};
+
+
 /* Frame metadata type */
 enum vmeta_frame_type {
 	/* No metadata */
@@ -248,6 +265,22 @@ struct vmeta_frame_ext_automation {
 /* clang-format on */
 
 
+/* "Parrot Video Metadata" thermal extension definition */
+struct vmeta_frame_ext_thermal {
+	/* Calibration state */
+	enum vmeta_thermal_calib_state calib_state;
+
+	/* Minimum temperature spot */
+	struct vmeta_thermal_spot min;
+
+	/* Maximum temperature spot */
+	struct vmeta_thermal_spot max;
+
+	/* Probe temperature */
+	struct vmeta_thermal_spot probe;
+};
+
+
 /**
  * ToString function for enum vmeta_flying_state.
  * @param val: flying state value to convert
@@ -282,6 +315,15 @@ const char *vmeta_followme_anim_str(enum vmeta_followme_anim val);
  */
 VMETA_API
 const char *vmeta_automation_anim_str(enum vmeta_automation_anim val);
+
+
+/**
+ * ToString function for enum vmeta_thermal_calibration_state.
+ * @param val: thermal calibration state value to convert
+ * @return a string description of the thermal calibration state
+ */
+VMETA_API
+const char *vmeta_thermal_calib_state_str(enum vmeta_thermal_calib_state val);
 
 
 /**

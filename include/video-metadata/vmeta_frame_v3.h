@@ -29,7 +29,7 @@
 
 
 /* "Parrot Video Metadata" v3 maximum data size */
-#define VMETA_FRAME_V3_MAX_SIZE 116
+#define VMETA_FRAME_V3_MAX_SIZE 140
 
 /* "Parrot Video Metadata" v3 identifier */
 #define VMETA_FRAME_V3_BASE_ID 0x5033
@@ -122,11 +122,18 @@ struct vmeta_frame_v3 {
 	 * contents are valid, 0 otherwise) */
 	uint32_t has_automation:1;
 
+	/* Thermal extension validity flag (1 if the thermal structure
+	 * contents are valid, 0 otherwise) */
+	uint32_t has_thermal:1;
+
 	/* Timestamp extension */
 	struct vmeta_frame_ext_timestamp timestamp;
 
 	/* Automation extension */
 	struct vmeta_frame_ext_automation automation;
+
+	/* Thermal extension */
+	struct vmeta_frame_ext_thermal thermal;
 };
 /* clang-format on */
 

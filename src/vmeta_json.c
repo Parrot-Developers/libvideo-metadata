@@ -153,4 +153,22 @@ int vmeta_json_add_thermal_conversion(
 }
 
 
+int vmeta_json_add_thermal_spot(struct json_object *jobj,
+				const char *name,
+				const struct vmeta_thermal_spot *val)
+{
+	if (!val->valid)
+		return 0;
+
+	struct json_object *jobj_val = json_object_new_object();
+
+	vmeta_json_add_double(jobj_val, "x", val->x);
+	vmeta_json_add_double(jobj_val, "y", val->y);
+	vmeta_json_add_double(jobj_val, "temp", val->temp);
+
+	json_object_object_add(jobj, name, jobj_val);
+	return 0;
+}
+
+
 #endif /* BUILD_JSON */

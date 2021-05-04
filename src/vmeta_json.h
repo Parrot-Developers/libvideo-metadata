@@ -98,6 +98,11 @@ int vmeta_json_add_thermal_conversion(
 	const struct vmeta_thermal_conversion *val);
 
 
+int vmeta_json_add_thermal_spot(struct json_object *jobj,
+				const char *name,
+				const struct vmeta_thermal_spot *val);
+
+
 #endif /* BUILD_JSON */
 
 #endif /* !_VMETA_JSON_H_ */

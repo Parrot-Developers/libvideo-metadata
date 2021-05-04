@@ -110,6 +110,8 @@ int vmeta_frame_v3_write(struct vmeta_buffer *buf,
 		CHECK(vmeta_frame_ext_timestamp_write(buf, &meta->timestamp));
 	if (meta->has_automation)
 		CHECK(vmeta_frame_ext_automation_write(buf, &meta->automation));
+	if (meta->has_thermal)
+		CHECK(vmeta_frame_ext_thermal_write(buf, &meta->thermal));
 
 	/* Check again for correct alignment */
 	if ((buf->pos - start) % 4 != 0) {
@@ -250,6 +252,12 @@ int vmeta_frame_v3_read(struct vmeta_buffer *buf, struct vmeta_frame_v3 *meta)
 				meta->has_automation = 1;
 			break;
 
+		case VMETA_FRAME_EXT_THERMAL_ID:
+			res = vmeta_frame_ext_thermal_read(buf, &meta->thermal);
+			if (res == 0)
+				meta->has_thermal = 1;
+			break;
+
 		default:
 			ULOGW("vmeta_frame_v3: unknown extension id: 0x%04x",
 			      id);
@@ -336,6 +344,21 @@ int vmeta_frame_v3_to_json(const struct vmeta_frame_v3 *meta,
 			"animation",
 			vmeta_automation_anim_str(meta->automation.animation));
 		json_object_object_add(jobj, "automation", jobj_automation);
+	}
+
+	if (meta->has_thermal) {
+		struct json_object *jobj_thermal = json_object_new_object();
+		vmeta_json_add_str(jobj_thermal,
+				   "calib_state",
+				   vmeta_thermal_calib_state_str(
+					   meta->thermal.calib_state));
+		vmeta_json_add_thermal_spot(
+			jobj_thermal, "min", &meta->thermal.min);
+		vmeta_json_add_thermal_spot(
+			jobj_thermal, "max", &meta->thermal.max);
+		vmeta_json_add_thermal_spot(
+			jobj_thermal, "probe", &meta->thermal.probe);
+		json_object_object_add(jobj, "thermal", jobj_thermal);
 	}
 
 	return 0;
@@ -448,6 +471,33 @@ size_t vmeta_frame_v3_to_csv(const struct vmeta_frame_v3 *meta,
 		VMETA_STR_PRINT(str + len, len, maxlen - len, " 0 0 0 0");
 	}
 
+	if (meta->has_thermal) {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				" %d ",
+				meta->thermal.calib_state);
+		len += vmeta_csv_add_thermal_spot(
+			str + len, maxlen - len, &meta->thermal.min);
+		VMETA_STR_SPACE(str + len, len, maxlen - len);
+		len += vmeta_csv_add_thermal_spot(
+			str + len, maxlen - len, &meta->thermal.max);
+		VMETA_STR_SPACE(str + len, len, maxlen - len);
+		len += vmeta_csv_add_thermal_spot(
+			str + len, maxlen - len, &meta->thermal.probe);
+	} else {
+		struct vmeta_thermal_spot spot = {0};
+		VMETA_STR_PRINT(str + len, len, maxlen - len, " 0 ");
+		len += vmeta_csv_add_thermal_spot(
+			str + len, maxlen - len, &spot);
+		VMETA_STR_SPACE(str + len, len, maxlen - len);
+		len += vmeta_csv_add_thermal_spot(
+			str + len, maxlen - len, &spot);
+		VMETA_STR_SPACE(str + len, len, maxlen - len);
+		len += vmeta_csv_add_thermal_spot(
+			str + len, maxlen - len, &spot);
+	}
+
 	return len;
 }
 
@@ -482,7 +532,14 @@ size_t vmeta_frame_v3_csv_header(char *str, size_t maxlen)
 		" automation_flight_destination_altitude"
 		" automation_flight_destination_sv_count"
 		" automation_followme_enabled automation_lookatme_enabled"
-		" automation_angle_locked automation_animation");
+		" automation_angle_locked automation_animation"
+		" thermal_cablib_state"
+		" thermal_min_valid"
+		" thermal_min_x thermal_min_y thermal_min_temp"
+		" thermal_max_valid"
+		" thermal_max_x thermal_max_y thermal_max_temp"
+		" thermal_probe_valid"
+		" thermal_probe_x thermal_probe_y thermal_probe_temp");
 
 	return len;
 }

@@ -46,6 +46,9 @@ extern "C" {
 #endif /* !VMETA_API_EXPORTS */
 
 
+#define VMETA_API_VERSION 1
+
+
 /* Forward declaration */
 struct json_object;
 
@@ -164,6 +167,27 @@ struct vmeta_fov {
 
 	/* 1 if vertical field of view is valid, 0 otherwise */
 	uint32_t has_vert:1;
+};
+/* clang-format on */
+
+
+/* Thermal spot */
+/* clang-format off */
+struct vmeta_thermal_spot {
+	/* Position x; Normalized relative to the frame width; [0:1]
+	 * where 0 is the left frame border */
+	float x;
+
+	/* Position y; Normalized relative to the frame height; [0:1]
+	 * where 0 is the top frame border */
+	float y;
+
+	/* Temperature in kelvin or in raw sensor signal unit in case of
+	 * non-radiometric sensor */
+	float temp;
+
+	/* Validity flag (1 if the structure contents are valid, 0 otherwise) */
+	uint8_t valid;
 };
 /* clang-format on */
 
