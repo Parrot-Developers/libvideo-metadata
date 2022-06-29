@@ -370,6 +370,14 @@ int vmeta_frame_ext_thermal_read(struct vmeta_buffer *buf,
 				 struct vmeta_frame_ext_thermal *meta);
 
 
+int vmeta_frame_ext_lfic_write(struct vmeta_buffer *buf,
+			       const struct vmeta_frame_ext_lfic *meta);
+
+
+int vmeta_frame_ext_lfic_read(struct vmeta_buffer *buf,
+			      struct vmeta_frame_ext_lfic *meta);
+
+
 /**
  * Internal API for vmeta_frame_proto
  */
@@ -396,6 +404,14 @@ const char *vmeta_link_type_to_str(Vmeta__LinkType val);
 
 
 const char *vmeta_link_status_to_str(Vmeta__LinkStatus val);
+
+
+/**
+ * Internal conversion API
+ */
+int vmeta_frame_convert(struct vmeta_frame *in_frame,
+			struct vmeta_frame **out_frame,
+			enum vmeta_frame_type out_type);
 
 
 #endif /* !_VMETA_PRIV_H_ */

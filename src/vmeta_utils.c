@@ -172,6 +172,8 @@ int vmeta_frame_get_location(struct vmeta_frame *meta,
 		break;
 	}
 
+	if (res == 0 && loc->valid == 0)
+		res = -ENOENT;
 	return res;
 }
 
@@ -722,6 +724,8 @@ int vmeta_frame_get_frame_timestamp(struct vmeta_frame *meta,
 		break;
 	}
 
+	if (res == 0 && *timestamp == 0)
+		res = -ENOENT;
 	return res;
 }
 
@@ -1036,7 +1040,7 @@ int vmeta_frame_get_picture_h_fov(struct vmeta_frame *meta, float *fov)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		*fov = tm->camera->hfov;
+		*fov = tm->camera->hfov * 180. / M_PI;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
@@ -1080,7 +1084,7 @@ int vmeta_frame_get_picture_v_fov(struct vmeta_frame *meta, float *fov)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		*fov = tm->camera->vfov;
+		*fov = tm->camera->vfov * 180. / M_PI;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
@@ -1380,6 +1384,7 @@ int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 				  enum vmeta_piloting_mode *mode)
 {
 	int res = 0;
+	const Vmeta__TimedMetadata *tm;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(mode == NULL, EINVAL);
 	*mode = VMETA_PILOTING_MODE_MANUAL;
@@ -1387,7 +1392,6 @@ int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 	switch (meta->type) {
 	case VMETA_FRAME_TYPE_NONE:
 	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
-	case VMETA_FRAME_TYPE_PROTO:
 		res = -ENOENT;
 		break;
 
@@ -1405,6 +1409,20 @@ int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 
 	case VMETA_FRAME_TYPE_V3:
 		*mode = meta->v3.base.mode;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*mode = vmeta_frame_piloting_mode_proto_to_vmeta(
+			tm->drone->piloting_mode);
+		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
 	default:
@@ -1638,4 +1656,160 @@ const char *vmeta_tone_mapping_to_str(enum vmeta_tone_mapping val)
 	default:
 		return "unknown";
 	}
+}
+
+
+static inline float wrap_to_pi(float input)
+{
+	float output = fmodf(input + M_PI, 2 * M_PI) - M_PI;
+	if ((-M_PI) > (input))
+		output += 2 * M_PI;
+	return output;
+}
+
+
+int vmeta_location_horiz_distance(const struct vmeta_location *loc1,
+				  const struct vmeta_location *loc2,
+				  float *horizontal_distance)
+{
+	ULOG_ERRNO_RETURN_ERR_IF(loc1 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(!loc1->valid, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(loc2 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(!loc2->valid, EINVAL);
+
+	double tmp, hdist;
+	double r_earth = 6371000.; /* earth radius */
+	double deg_to_rad = M_PI / 180.;
+	double lat1 = loc1->latitude * deg_to_rad;
+	double lon1 = loc1->longitude * deg_to_rad;
+	double lat2 = loc2->latitude * deg_to_rad;
+	double lon2 = loc2->longitude * deg_to_rad;
+
+	tmp = sin((lat2 - lat1) / 2) * sin((lat2 - lat1) / 2) +
+	      cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) *
+		      sin((lon2 - lon1) / 2);
+	hdist = r_earth * 2 * atan2(sqrt(tmp), sqrt(1. - tmp));
+
+	/* Horizontal distance */
+	if (horizontal_distance)
+		*horizontal_distance = hdist;
+
+	return 0;
+}
+
+
+int vmeta_location_delta(const struct vmeta_location *loc1,
+			 const struct vmeta_location *loc2,
+			 float *distance,
+			 float *horizontal_distance,
+			 double *bearing,
+			 double *elevation)
+{
+	ULOG_ERRNO_RETURN_ERR_IF(loc1 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(!loc1->valid, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(loc2 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(!loc2->valid, EINVAL);
+
+	int ret;
+	float horiz_dist;
+	double deg_to_rad = M_PI / 180.;
+	double lat1 = loc1->latitude;
+	double lon1 = loc1->longitude;
+	double lat2 = loc2->latitude;
+	double lon2 = loc2->longitude;
+	double alt_diff = loc2->altitude - loc1->altitude;
+
+	ret = vmeta_location_horiz_distance(loc1, loc2, &horiz_dist);
+	if (ret < 0)
+		return ret;
+
+	lat1 *= deg_to_rad;
+	lon1 *= deg_to_rad;
+	lat2 *= deg_to_rad;
+	lon2 *= deg_to_rad;
+
+	/* Horizontal distance */
+	if (horizontal_distance)
+		*horizontal_distance = horiz_dist;
+
+	/* Bearing angle */
+	if (bearing) {
+		double x = cos(lat2) * sin(lon2 - lon1);
+		double y = cos(lat1) * sin(lat2) -
+			   sin(lat1) * cos(lat2) * cos(lon2 - lon1);
+		*bearing = atan2(x, y);
+	}
+
+	/* Elevation */
+	if (elevation)
+		*elevation = atan2(alt_diff, horiz_dist);
+
+	/* Distance */
+	if (distance)
+		*distance = sqrt(horiz_dist * horiz_dist + alt_diff * alt_diff);
+
+	return 0;
+}
+
+
+int vmeta_frame_ltic(struct vmeta_frame *meta,
+		     const struct vmeta_location *loc,
+		     float *screen_x,
+		     float *screen_y,
+		     float *horizontal_distance,
+		     float *distance)
+{
+	int ret;
+	float deg_to_rad = M_PI / 180.;
+	struct vmeta_location cam_loc = {};
+	struct vmeta_euler cam_euler = {};
+	double bearing = 0., elevation = 0.;
+	float dist = 0., hdist = 0.;
+	float hfov = 0., vfov = .0;
+
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(!loc->valid, EINVAL);
+
+	/* TODO: take into account the camera roll */
+
+	/* Get camera location from metadata */
+	ret = vmeta_frame_get_location(meta, &cam_loc);
+	if (ret < 0)
+		return ret;
+	/* Extract drone to location difference */
+	ret = vmeta_location_delta(
+		&cam_loc, loc, &dist, &hdist, &bearing, &elevation);
+	if (ret < 0)
+		return ret;
+	/* Extract camera euler angles from metadata */
+	ret = vmeta_frame_get_frame_euler(meta, &cam_euler);
+	if (ret < 0)
+		return ret;
+	/* Get camera horizontal FOV from metadata */
+	ret = vmeta_frame_get_picture_h_fov(meta, &hfov);
+	if (ret < 0)
+		return ret;
+	hfov *= deg_to_rad;
+	/* Get camera vertical FOV from metadata */
+	ret = vmeta_frame_get_picture_v_fov(meta, &vfov);
+	if (ret < 0)
+		return ret;
+	vfov *= deg_to_rad;
+	float yaw_diff = wrap_to_pi(bearing - cam_euler.yaw);
+	float pitch_diff = wrap_to_pi(elevation - cam_euler.pitch);
+
+	/* Check if the location is in the FOV */
+	if (fabsf(yaw_diff) >= hfov / 2 || fabsf(pitch_diff) >= vfov / 2)
+		return -ERANGE;
+	/* TODO: this works only for rectilinear reprojection */
+	if (screen_x)
+		*screen_x = (0.5 * tan(yaw_diff) / tan(hfov / 2)) + 0.5;
+	if (screen_y)
+		*screen_y = (-0.5 * tan(pitch_diff) / tan(vfov / 2)) + 0.5;
+	if (horizontal_distance)
+		*horizontal_distance = hdist;
+	if (distance)
+		*distance = dist;
+	return 0;
 }

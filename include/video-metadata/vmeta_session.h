@@ -169,8 +169,14 @@ enum vmeta_stream_sdes_type {
 /* Run UUID */
 #define VMETA_STRM_SDES_KEY_RUN_ID "run_id"
 
+/* Boot date */
+#define VMETA_STRM_SDES_KEY_BOOT_DATE "boot_date"
+
 /* Boot UUID */
 #define VMETA_STRM_SDES_KEY_BOOT_ID "boot_id"
+
+/* Flight date */
+#define VMETA_STRM_SDES_KEY_FLIGHT_DATE "flight_date"
 
 /* Flight UUID */
 #define VMETA_STRM_SDES_KEY_FLIGHT_ID "flight_id"
@@ -285,8 +291,14 @@ enum vmeta_stream_sdp_type {
 /* Run UUID */
 #define VMETA_STRM_SDP_KEY_RUN_ID "X-com-parrot-run-id"
 
+/* Boot date */
+#define VMETA_STRM_SDP_KEY_BOOT_DATE "X-com-parrot-boot-date"
+
 /* Boot UUID */
 #define VMETA_STRM_SDP_KEY_BOOT_ID "X-com-parrot-boot-id"
+
+/* Flight date */
+#define VMETA_STRM_SDP_KEY_FLIGHT_DATE "X-com-parrot-flight-date"
 
 /* Flight UUID */
 #define VMETA_STRM_SDP_KEY_FLIGHT_ID "X-com-parrot-flight-id"
@@ -342,6 +354,9 @@ enum vmeta_stream_sdp_type {
 /* Thermal camera scale factor */
 #define VMETA_STRM_SDP_KEY_THERMAL_SCALE_FACTOR                                \
 	"X-com-parrot-thermal-scale-factor"
+
+/* Default media */
+#define VMETA_STRM_SDP_KEY_DEFAULT_MEDIA "X-com-parrot-default-media"
 
 /* Camera type */
 #define VMETA_STRM_SDP_KEY_CAMERA_TYPE "X-com-parrot-camera-type"
@@ -414,14 +429,20 @@ enum vmeta_record_type {
 /* Software build ID */
 #define VMETA_REC_META_KEY_BUILD_ID "com.parrot.build.id"
 
-/* Run UUID */
-#define VMETA_REC_META_KEY_RUN_ID "com.parrot.run.id"
-
 /* Run date */
 #define VMETA_REC_META_KEY_RUN_DATE "com.parrot.run.date"
 
+/* Run UUID */
+#define VMETA_REC_META_KEY_RUN_ID "com.parrot.run.id"
+
+/* Boot date */
+#define VMETA_REC_META_KEY_BOOT_DATE "com.parrot.boot.date"
+
 /* Boot UUID */
 #define VMETA_REC_META_KEY_BOOT_ID "com.parrot.boot.id"
+
+/* Flight date */
+#define VMETA_REC_META_KEY_FLIGHT_DATE "com.parrot.flight.date"
 
 /* Flight UUID */
 #define VMETA_REC_META_KEY_FLIGHT_ID "com.parrot.flight.id"
@@ -658,9 +679,25 @@ struct vmeta_session {
 	 * (unused on the controller side) */
 	char run_id[33];
 
+	/* Boot date and time in seconds since the Epoch
+	 * (unused on the controller side) */
+	time_t boot_date;
+
+	/* Boot date GMT offset in seconds east (eg. GMT-6 is -21600)
+	 * (unused on the controller side) */
+	long boot_date_gmtoff;
+
 	/* Boot UUID (32-chars hex string representing a 128bits value)
 	 * (unused on the controller side) */
 	char boot_id[33];
+
+	/* Flight date and time in seconds since the Epoch
+	 * (unused on the controller side) */
+	time_t flight_date;
+
+	/* Flight date GMT offset in seconds east (eg. GMT-6 is -21600)
+	 * (unused on the controller side) */
+	long flight_date_gmtoff;
 
 	/* Flight UUID (32-chars hex string representing a 128bits value)
 	 * (unused on the controller side) */
@@ -681,6 +718,9 @@ struct vmeta_session {
 	/* Thermal camera metadata validity flag (1 if the thermal structure
 	 * contents are valid, 0 otherwise) */
 	uint32_t has_thermal:1;
+
+	/* Default media flag (only used in SDP) */
+	uint32_t default_media:1;
 
 	/* Camera type */
 	enum vmeta_camera_type camera_type;

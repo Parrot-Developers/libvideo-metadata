@@ -31,16 +31,19 @@ ULOG_DECLARE_TAG(ULOG_TAG);
 static CU_SuiteInfo s_suites[] = {
 	{(char *)"vmeta utils", NULL, NULL, s_utils_tests},
 	{(char *)"vmeta frame protobuf", NULL, NULL, s_proto_tests},
+	{(char *)"vmeta frame v3", NULL, NULL, s_v3_tests},
 	CU_SUITE_INFO_NULL,
 };
 
 static CU_SuiteInfo s_monkey_suites[] = {
 	{(char *)"protobuf monkey tests", NULL, NULL, s_proto_monkey},
+	{(char *)"meta_v3 monkey tests", NULL, NULL, s_v3_monkey},
 	CU_SUITE_INFO_NULL,
 };
 
 static CU_SuiteInfo s_dump_suites[] = {
 	{(char *)"protobuf reference buffer gen", NULL, NULL, s_proto_gen},
+	{(char *)"meta_v3 reference buffer gen", NULL, NULL, s_v3_gen},
 	CU_SUITE_INFO_NULL,
 };
 

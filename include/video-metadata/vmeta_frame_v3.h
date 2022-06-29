@@ -29,7 +29,7 @@
 
 
 /* "Parrot Video Metadata" v3 maximum data size */
-#define VMETA_FRAME_V3_MAX_SIZE 140
+#define VMETA_FRAME_V3_MAX_SIZE 168
 
 /* "Parrot Video Metadata" v3 identifier */
 #define VMETA_FRAME_V3_BASE_ID 0x5033
@@ -126,6 +126,10 @@ struct vmeta_frame_v3 {
 	 * contents are valid, 0 otherwise) */
 	uint32_t has_thermal:1;
 
+	/* Location From Image coordinates extension validity flag
+	 * (1 if the LFIC structure contents are valid, 0 otherwise) */
+	uint32_t has_lfic:1;
+
 	/* Timestamp extension */
 	struct vmeta_frame_ext_timestamp timestamp;
 
@@ -134,6 +138,9 @@ struct vmeta_frame_v3 {
 
 	/* Thermal extension */
 	struct vmeta_frame_ext_thermal thermal;
+
+	/* Location From Image Coordinates extension */
+	struct vmeta_frame_ext_lfic lfic;
 };
 /* clang-format on */
 

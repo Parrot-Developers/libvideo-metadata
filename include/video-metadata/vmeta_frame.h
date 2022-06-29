@@ -48,6 +48,11 @@
 #define VMETA_FRAME_EXT_THERMAL_ID 0x4534
 
 
+/* "Parrot Video Metadata" Location From Image Coordinates
+ * extension identifier */
+#define VMETA_FRAME_EXT_LFIC_ID 0x4536
+
+
 /* Flying states */
 enum vmeta_flying_state {
 	/* Landed state */
@@ -102,6 +107,9 @@ enum vmeta_piloting_mode {
 
 	/* Automatic "move to" in progress */
 	VMETA_PILOTING_MODE_MOVE_TO,
+
+	/* Unknown piloting mode */
+	VMETA_PILOTING_MODE_UNKNOWN,
 };
 
 
@@ -284,6 +292,28 @@ struct vmeta_frame_ext_thermal {
 };
 
 
+/* "Parrot Video Metadata" Location From Image Coordinates
+ * extension definition */
+struct vmeta_frame_ext_lfic {
+	/* Normalized horizontal position of the target cursor
+	 * in the image ([0..1]) */
+	float target_x;
+
+	/* Normalized vertical position of the target cursor
+	 * in the image ([0..1]) */
+	float target_y;
+
+	/* Location of the target */
+	struct vmeta_location target_location;
+
+	/* Estimated precision of the position (m) */
+	double estimated_precision;
+
+	/* Grid precision used for calculation (m) */
+	double grid_precision;
+};
+
+
 /**
  * ToString function for enum vmeta_flying_state.
  * @param val: flying state value to convert
@@ -429,7 +459,8 @@ int vmeta_frame_write(struct vmeta_buffer *buf, struct vmeta_frame *meta);
  * of the buffer (len field) must be sufficient to allow reading the metadata
  * otherwise an error is returned. The ownership of the buffer stays with
  * the caller.
- * The allocated structure has a reference count of 1.
+ * The allocated structure has a reference count of 1, and is converted to
+ * protobuf-based metadata when possible.
  * @param buf: pointer to the buffer structure
  * @param mime_type: pointer to the metadata MIME type, if known;
  *                   if NULL, the type will be automatically detected when
@@ -441,6 +472,37 @@ VMETA_API
 int vmeta_frame_read(struct vmeta_buffer *buf,
 		     const char *mime_type,
 		     struct vmeta_frame **ret_obj);
+
+/**
+ * Read frame metadata.
+ * This function allocates a new metadata structure, deserializing data from
+ * the provided buffer, and detecting the metadata type when possible.
+ * Providing the MIME type is mandatory for protobuf-based metadata or metadata
+ * from recording files (MP4).
+ * The pos field in the buf structure must be set to the starting position for
+ * reading (can be 0 if no previous data is present in the buffer). The size
+ * of the buffer (len field) must be sufficient to allow reading the metadata
+ * otherwise an error is returned. The ownership of the buffer stays with
+ * the caller.
+ * The allocated structure has a reference count of 1.
+ * If convert is set to a non-zero value, this function has the same behavior as
+ * `vmeta_frame_read(...)': the allocated structure is converted to
+ * protobuf-based metadata when possible. If convert is zero, the raw
+ * deserialized metadata is returned.
+ * @param buf: pointer to the buffer structure
+ * @param mime_type: pointer to the metadata MIME type, if known;
+ *                   if NULL, the type will be automatically detected when
+ *                   possible.
+ * @param convert: if non-zero, ret_obj will be converted to protobuf-based
+ *                 metadata, when possible.
+ * @param ret_obj: pointer filled with the new vmeta_frame structure
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_read2(struct vmeta_buffer *buf,
+		      const char *mime_type,
+		      int convert,
+		      struct vmeta_frame **ret_obj);
 
 
 /**
@@ -790,8 +852,8 @@ int vmeta_frame_get_awb_b_gain(struct vmeta_frame *meta, float *gain);
 /**
  * Get the picture horizontal field of view from a frame metadata structure.
  * The function fills the fov value with the picture horizontal field of view
- * if it is available according to the metadata type. If the FOV is not
- * available for the given type, -ENOENT is returned.
+ * in degrees if it is available according to the metadata type. If the FOV is
+ * not available for the given type, -ENOENT is returned.
  * @param meta: pointer to a frame metadata structure
  * @param fov: pointer to a FOV value (output)
  * @return 0 on success, negative errno value in case of error
@@ -803,8 +865,8 @@ int vmeta_frame_get_picture_h_fov(struct vmeta_frame *meta, float *fov);
 /**
  * Get the picture vertical field of view from a frame metadata structure.
  * The function fills the fov value with the picture vertical field of view
- * if it is available according to the metadata type. If the FOV is not
- * available for the given type, -ENOENT is returned.
+ * in degrees if it is available according to the metadata type. If the FOV is
+ * not available for the given type, -ENOENT is returned.
  * @param meta: pointer to a frame metadata structure
  * @param fov: pointer to a FOV value (output)
  * @return 0 on success, negative errno value in case of error
@@ -892,5 +954,31 @@ VMETA_API
 int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 				  enum vmeta_piloting_mode *mode);
 
+
+/**
+ * Location to image coordinates.
+ * This function computes the normalized image coordinates from a metadata
+ * structure (camera location, angles and FOV) and a location. If the location
+ * is not visible in the image, the functions returns -ERANGE. Otherwise the
+ * function fills the values pointed by screen_x and screen_y with the
+ * normalized coordinates (i.e. in the range 0.0 to 1.0, top-left to
+ * bottom-right).
+ * @param meta: pointer to a frame metadata structure
+ * @param loc: pointer to a location structure
+ * @param screen_x: optional pointer to a normalized horizontal coordinate in
+ *           the image [0..1] (output)
+ * @param screen_y: optional pointer to a normalized vertical coordinate in
+ *           the image [0..1] (output)
+ * @param horizontal_distance: optional pointer to the horizontal distance
+ *           in meters (output)
+ * @param distance: optional pointer to the distance in meters (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_ltic(struct vmeta_frame *meta,
+			       const struct vmeta_location *loc,
+			       float *screen_x,
+			       float *screen_y,
+			       float *horizontal_distance,
+			       float *distance);
 
 #endif /* !_VMETA_FRAME_H_ */

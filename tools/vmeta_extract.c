@@ -149,9 +149,9 @@ static int frame_extract(struct vmeta_extract *self,
 	int ret = 0;
 	struct vmeta_frame *meta;
 
-	ret = vmeta_frame_read(buf, mime_format, &meta);
+	ret = vmeta_frame_read2(buf, mime_format, 0, &meta);
 	if (ret < 0) {
-		ULOG_ERRNO("vmeta_frame_read", -ret);
+		ULOG_ERRNO("vmeta_frame_read2", -ret);
 		return ret;
 	}
 

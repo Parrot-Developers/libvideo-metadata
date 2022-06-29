@@ -29,6 +29,9 @@
 
 #include <vmeta.pb-c.h>
 
+/* "Parrot Video Metadata" protobuf-based RTP extension header identifier */
+#define VMETA_FRAME_PROTO_RTP_EXT_ID 0x5062 /* "Pb" in ASCII */
+
 /* "Parrot Video Metadata" protobuf-based MIME type */
 #define VMETA_FRAME_PROTO_MIME_TYPE                                            \
 	"application/octet-stream;type=com.parrot.videometadataproto"
@@ -193,6 +196,15 @@ vmeta_frame_proto_get_camera_base_quat(Vmeta__CameraMetadata *camera);
 VMETA_API Vmeta__Quaternion *
 vmeta_frame_proto_get_camera_quat(Vmeta__CameraMetadata *camera);
 
+/**
+ * Get the Vect3 local position part of a CameraMetadata,
+ * creating it if required.
+ * @param drone: the CameraMetadata
+ * @return A pointer to the Vec3 local position, or NULL on error.
+ */
+VMETA_API Vmeta__Vector3 *
+vmeta_frame_proto_get_camera_local_position(Vmeta__CameraMetadata *camera);
+
 
 /**
  * Get the DroneMetadata part of a TimedMetadata (root metadata), creating
@@ -310,6 +322,86 @@ vmeta_frame_proto_proposal_add_box(Vmeta__TrackingProposalMetadata *proposal);
 
 
 /**
+ * Get the AutomationMetadata part of a TimedMetadata (root metadata),
+ * creating it if required.
+ * @param meta: the TimedMetadata
+ * @return A pointer to the AutomationMetadata, or NULL on error.
+ */
+VMETA_API Vmeta__AutomationMetadata *
+vmeta_frame_proto_get_automation(Vmeta__TimedMetadata *meta);
+
+/**
+ * Get the destination Location part of an AutomationMetadata, creating it
+ * if required.
+ * @param automation: the AutomationMetadata
+ * @return A pointer to the destination Locations, or NULL on error.
+ */
+VMETA_API Vmeta__Location *vmeta_frame_proto_get_automation_destination(
+	Vmeta__AutomationMetadata *automation);
+
+/**
+ * Get the target_location Location part of an AutomationMetadata,
+ * creating it if required.
+ * @param automation: the AutomationMetadata
+ * @return A pointer to the target_location Locations, or NULL on error.
+ */
+VMETA_API Vmeta__Location *vmeta_frame_proto_get_automation_target_location(
+	Vmeta__AutomationMetadata *automation);
+
+
+/**
+ * Get the ThermalMetadata part of a TimedMetadata (root metadata), creating it
+ * if required.
+ * @param meta: the TimedMetadata
+ * @return A pointer to the ThermalMetadata, or NULL on error.
+ */
+VMETA_API Vmeta__ThermalMetadata *
+vmeta_frame_proto_get_thermal(Vmeta__TimedMetadata *meta);
+
+/**
+ * Get the min TermalSpot part of a ThermalMetadata, creating it if required.
+ * @param thermal: the ThermalMetadata
+ * @return A pointer to the min ThermalSpot, or NULL on error.
+ */
+VMETA_API Vmeta__ThermalSpot *
+vmeta_frame_proto_get_thermal_min(Vmeta__ThermalMetadata *thermal);
+
+/**
+ * Get the max TermalSpot part of a ThermalMetadata, creating it if required.
+ * @param thermal: the ThermalMetadata
+ * @return A pointer to the max ThermalSpot, or NULL on error.
+ */
+VMETA_API Vmeta__ThermalSpot *
+vmeta_frame_proto_get_thermal_max(Vmeta__ThermalMetadata *thermal);
+
+/**
+ * Get the probe TermalSpot part of a ThermalMetadata, creating it if required.
+ * @param thermal: the ThermalMetadata
+ * @return A pointer to the probe ThermalSpot, or NULL on error.
+ */
+VMETA_API Vmeta__ThermalSpot *
+vmeta_frame_proto_get_thermal_probe(Vmeta__ThermalMetadata *thermal);
+
+
+/**
+ * Get the LFICMetadata part of a TimedMetadata (root metadata), creating it if
+ * required.
+ * @param meta: the TimedMetadata
+ * @return A pointer to the LFICMetadata, or NULL on error.
+ */
+VMETA_API Vmeta__LFICMetadata *
+vmeta_frame_proto_get_lfic(Vmeta__TimedMetadata *meta);
+
+/**
+ * Get the location Location part of an LFICMetadata, creating it if required.
+ * @param lfic: the LFICMetadata
+ * @return A pointer to the location Locations, or NULL on error.
+ */
+VMETA_API Vmeta__Location *
+vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic);
+
+
+/**
  * Enum converters
  */
 
@@ -321,6 +413,73 @@ vmeta_frame_proto_proposal_add_box(Vmeta__TrackingProposalMetadata *proposal);
  */
 VMETA_API enum vmeta_flying_state
 vmeta_frame_flying_state_proto_to_vmeta(Vmeta__FlyingState state);
+
+/**
+ * Convert a vmeta_flying_state enum into its Vmeta__FlyingState equivalent.
+ *
+ * @param state: state to convert
+ * @return The converted flying state
+ */
+VMETA_API Vmeta__FlyingState
+vmeta_frame_flying_state_vmeta_to_proto(enum vmeta_flying_state state);
+
+/**
+ * Convert a Vmeta__PilotingMode enum into its vmeta_piloting_mode equivalent.
+ *
+ * @param mode: mode to convert
+ * @return The converted piloting mode
+ */
+VMETA_API enum vmeta_piloting_mode
+vmeta_frame_piloting_mode_proto_to_vmeta(Vmeta__PilotingMode mode);
+
+/**
+ * Convert a vmeta_piloting_mode enum into its Vmeta__PilotingMode equivalent.
+ *
+ * @param mode: mode to convert
+ * @return The converted piloting mode
+ */
+VMETA_API Vmeta__PilotingMode
+vmeta_frame_piloting_mode_vmeta_to_proto(enum vmeta_piloting_mode mode);
+
+/**
+ * Convert a Vmeta__Animation enum into its vmeta_automation_anim equivalent.
+ *
+ * @param anim: animation to convert
+ * @return The converted animation
+ */
+VMETA_API enum vmeta_automation_anim
+vmeta_frame_automation_anim_proto_to_vmeta(Vmeta__Animation anim);
+
+/**
+ * Convert a vmeta_automation_anim enum into its Vmeta__Animation equivalent.
+ *
+ * @param anim: animation to convert
+ * @return The converted animation
+ */
+VMETA_API Vmeta__Animation
+vmeta_frame_automation_anim_vmeta_to_proto(enum vmeta_automation_anim anim);
+
+/**
+ * Convert a Vmeta__ThermalCalibrationState enum into its
+ * vmeta_thermal_calib_state equivalent.
+ *
+ * @param state: state to convert
+ * @return The converted state
+ */
+VMETA_API enum vmeta_thermal_calib_state
+vmeta_frame_thermal_calib_state_proto_to_vmeta(
+	Vmeta__ThermalCalibrationState state);
+
+/**
+ * Convert a vmeta_thermal_calib_state enum into its
+ * Vmeta__ThermalCalibrationState equivalent.
+ *
+ * @param state: state to convert
+ * @return The converted state
+ */
+VMETA_API Vmeta__ThermalCalibrationState
+vmeta_frame_thermal_calib_state_vmeta_to_proto(
+	enum vmeta_thermal_calib_state state);
 
 
 #endif /* !_VMETA_FRAME_PROTO_H_ */

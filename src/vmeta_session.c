@@ -442,11 +442,38 @@ int vmeta_session_streaming_sdes_write(
 		      userdata);
 	}
 
+	if (meta->boot_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret = vmeta_session_date_write(date,
+						       sizeof(date),
+						       meta->boot_date,
+						       meta->boot_date_gmtoff);
+		if (ret > 0)
+			(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+			      date,
+			      VMETA_STRM_SDES_KEY_BOOT_DATE,
+			      userdata);
+	}
+
 	if (meta->boot_id[0] != '\0') {
 		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
 		      meta->boot_id,
 		      VMETA_STRM_SDES_KEY_BOOT_ID,
 		      userdata);
+	}
+
+	if (meta->flight_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret =
+			vmeta_session_date_write(date,
+						 sizeof(date),
+						 meta->flight_date,
+						 meta->flight_date_gmtoff);
+		if (ret > 0)
+			(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+			      date,
+			      VMETA_STRM_SDES_KEY_FLIGHT_DATE,
+			      userdata);
 	}
 
 	if (meta->flight_id[0] != '\0') {
@@ -618,8 +645,20 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_RUN_ID) == 0) {
 			COPY_VALUE(meta->run_id, value);
 
+		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_BOOT_DATE) == 0) {
+			ret = vmeta_session_date_read(value,
+						      &meta->boot_date,
+						      &meta->boot_date_gmtoff);
+
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_BOOT_ID) == 0) {
 			COPY_VALUE(meta->boot_id, value);
+
+		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_FLIGHT_DATE) ==
+			   0) {
+			ret = vmeta_session_date_read(
+				value,
+				&meta->flight_date,
+				&meta->flight_date_gmtoff);
 
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_FLIGHT_ID) == 0) {
 			COPY_VALUE(meta->flight_id, value);
@@ -850,11 +889,40 @@ int vmeta_session_streaming_sdp_write(const struct vmeta_session *meta,
 		      userdata);
 	}
 
+	if ((!media_level) && (meta->boot_date != 0)) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret = vmeta_session_date_write(date,
+						       sizeof(date),
+						       meta->boot_date,
+						       meta->boot_date_gmtoff);
+		if (ret > 0) {
+			(*cb)(VMETA_STRM_SDP_TYPE_SESSION_ATTR,
+			      date,
+			      VMETA_STRM_SDP_KEY_BOOT_DATE,
+			      userdata);
+		}
+	}
+
 	if ((!media_level) && (meta->boot_id[0] != '\0')) {
 		(*cb)(VMETA_STRM_SDP_TYPE_SESSION_ATTR,
 		      meta->boot_id,
 		      VMETA_STRM_SDP_KEY_BOOT_ID,
 		      userdata);
+	}
+
+	if ((!media_level) && (meta->flight_date != 0)) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret =
+			vmeta_session_date_write(date,
+						 sizeof(date),
+						 meta->flight_date,
+						 meta->flight_date_gmtoff);
+		if (ret > 0) {
+			(*cb)(VMETA_STRM_SDP_TYPE_SESSION_ATTR,
+			      date,
+			      VMETA_STRM_SDP_KEY_FLIGHT_DATE,
+			      userdata);
+		}
 	}
 
 	if ((!media_level) && (meta->flight_id[0] != '\0')) {
@@ -1012,6 +1080,11 @@ int vmeta_session_streaming_sdp_write(const struct vmeta_session *meta,
 		}
 	}
 
+	if (meta->default_media) {
+		const char *key = VMETA_STRM_SDP_KEY_DEFAULT_MEDIA;
+		(*cb)(type, "1", key, userdata);
+	}
+
 	return 0;
 }
 
@@ -1057,8 +1130,19 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_RUN_ID) == 0) {
 			COPY_VALUE(meta->run_id, value);
 
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_BOOT_DATE) == 0) {
+			ret = vmeta_session_date_read(value,
+						      &meta->boot_date,
+						      &meta->boot_date_gmtoff);
+
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_BOOT_ID) == 0) {
 			COPY_VALUE(meta->boot_id, value);
+
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_FLIGHT_DATE) == 0) {
+			ret = vmeta_session_date_read(
+				value,
+				&meta->flight_date,
+				&meta->flight_date_gmtoff);
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_FLIGHT_ID) == 0) {
 			COPY_VALUE(meta->flight_id, value);
@@ -1153,6 +1237,9 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 			   0) {
 			ret = vmeta_session_thermal_scale_factor_read(
 				value, &meta->thermal.scale_factor);
+
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_DEFAULT_MEDIA) == 0) {
+			meta->default_media = 1;
 		}
 		break;
 
@@ -1335,11 +1422,38 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 		      userdata);
 	}
 
+	if (meta->boot_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret = vmeta_session_date_write(date,
+						       sizeof(date),
+						       meta->boot_date,
+						       meta->boot_date_gmtoff);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_BOOT_DATE,
+			      date,
+			      userdata);
+	}
+
 	if (meta->boot_id[0] != '\0') {
 		(*cb)(VMETA_REC_META,
 		      VMETA_REC_META_KEY_BOOT_ID,
 		      meta->boot_id,
 		      userdata);
+	}
+
+	if (meta->flight_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret =
+			vmeta_session_date_write(date,
+						 sizeof(date),
+						 meta->flight_date,
+						 meta->flight_date_gmtoff);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_FLIGHT_DATE,
+			      date,
+			      userdata);
 	}
 
 	if (meta->flight_id[0] != '\0') {
@@ -1597,15 +1711,23 @@ int vmeta_session_recording_read(const char *key,
 	} else if (strcmp(key, VMETA_REC_META_KEY_BUILD_ID) == 0) {
 		COPY_VALUE(meta->build_id, value);
 
-	} else if (strcmp(key, VMETA_REC_META_KEY_RUN_ID) == 0) {
-		COPY_VALUE(meta->run_id, value);
-
 	} else if (strcmp(key, VMETA_REC_META_KEY_RUN_DATE) == 0) {
 		ret = vmeta_session_date_read(
 			value, &meta->run_date, &meta->run_date_gmtoff);
 
+	} else if (strcmp(key, VMETA_REC_META_KEY_RUN_ID) == 0) {
+		COPY_VALUE(meta->run_id, value);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_BOOT_DATE) == 0) {
+		ret = vmeta_session_date_read(
+			value, &meta->boot_date, &meta->boot_date_gmtoff);
+
 	} else if (strcmp(key, VMETA_REC_META_KEY_BOOT_ID) == 0) {
 		COPY_VALUE(meta->boot_id, value);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_FLIGHT_DATE) == 0) {
+		ret = vmeta_session_date_read(
+			value, &meta->flight_date, &meta->flight_date_gmtoff);
 
 	} else if (strcmp(key, VMETA_REC_META_KEY_FLIGHT_ID) == 0) {
 		COPY_VALUE(meta->flight_id, value);
@@ -1803,8 +1925,29 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 	if (meta->run_id[0] != '\0')
 		vmeta_json_add_str(jobj, "run_id", meta->run_id);
 
+	if (meta->boot_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret = vmeta_session_date_write(date,
+						       sizeof(date),
+						       meta->boot_date,
+						       meta->boot_date_gmtoff);
+		if (ret > 0)
+			vmeta_json_add_str(jobj, "boot_date", date);
+	}
+
 	if (meta->boot_id[0] != '\0')
 		vmeta_json_add_str(jobj, "boot_id", meta->boot_id);
+
+	if (meta->flight_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret =
+			vmeta_session_date_write(date,
+						 sizeof(date),
+						 meta->flight_date,
+						 meta->flight_date_gmtoff);
+		if (ret > 0)
+			vmeta_json_add_str(jobj, "flight_date", date);
+	}
 
 	if (meta->flight_id[0] != '\0')
 		vmeta_json_add_str(jobj, "flight_id", meta->flight_id);
@@ -1819,6 +1962,8 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 
 	if ((meta->picture_fov.has_horz) || (meta->picture_fov.has_vert))
 		vmeta_json_add_fov(jobj, "picture_fov", &meta->picture_fov);
+
+	/* Note: the default_media field is deliberately ommited here */
 
 	if (meta->camera_type != VMETA_CAMERA_TYPE_UNKNOWN) {
 		vmeta_json_add_str(jobj,
@@ -2018,12 +2163,43 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 				meta->run_id);
 	}
 
+	if (meta->boot_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret = vmeta_session_date_write(date,
+						       sizeof(date),
+						       meta->boot_date,
+						       meta->boot_date_gmtoff);
+		if (ret > 0) {
+			VMETA_STR_PRINT(str + len,
+					len,
+					maxlen - len,
+					"boot_date: %s\n",
+					date);
+		}
+	}
+
 	if (meta->boot_id[0] != '\0') {
 		VMETA_STR_PRINT(str + len,
 				len,
 				maxlen - len,
 				"boot_id: %s\n",
 				meta->boot_id);
+	}
+
+	if (meta->flight_date != 0) {
+		char date[VMETA_SESSION_DATE_MAX_LEN];
+		ssize_t ret =
+			vmeta_session_date_write(date,
+						 sizeof(date),
+						 meta->flight_date,
+						 meta->flight_date_gmtoff);
+		if (ret > 0) {
+			VMETA_STR_PRINT(str + len,
+					len,
+					maxlen - len,
+					"flight_date: %s\n",
+					date);
+		}
 	}
 
 	if (meta->flight_id[0] != '\0') {
@@ -2070,6 +2246,8 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 					fov);
 		}
 	}
+
+	/* Note: the default_media field is deliberately ommited here */
 
 	if (meta->camera_type != VMETA_CAMERA_TYPE_UNKNOWN) {
 		VMETA_STR_PRINT(str + len,

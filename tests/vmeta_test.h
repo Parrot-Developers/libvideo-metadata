@@ -40,9 +40,64 @@
 #define ULOG_TAG vmeta_test
 #include <ulog.h>
 
+
+#define VMETA_ASSERT_BOTH_NULL_NOTNULL(p1, p2)                                 \
+	CU_ASSERT((p1 == NULL && p2 == NULL) || (p1 && p2))
+
+#define MONKEY_TEST_COUNT 1000
+
 extern CU_TestInfo s_utils_tests[];
 extern CU_TestInfo s_proto_tests[];
 extern CU_TestInfo s_proto_monkey[];
 extern CU_TestInfo s_proto_gen[];
+extern CU_TestInfo s_v3_tests[];
+extern CU_TestInfo s_v3_monkey[];
+extern CU_TestInfo s_v3_gen[];
+
+/**
+ * Since the v1, v2 and v3 format stores floats and doubles as fixed point
+ * values, we need to handle a granularity for comparisons, based on the shift
+ * value applied when encoding the source value.
+ */
+static inline double granularity(unsigned int shift)
+{
+	return 1. / pow(2, shift);
+}
+
+/* Comparison functions */
+void compare_vmeta_quaternion(struct vmeta_quaternion *q1,
+			      struct vmeta_quaternion *q2);
+void compare_proto_quaternion(Vmeta__Quaternion *q1, Vmeta__Quaternion *q2);
+void compare_vmeta_proto_quaternion(struct vmeta_quaternion *q1,
+				    Vmeta__Quaternion *q2);
+void compare_vmeta_euler(struct vmeta_euler *e1, struct vmeta_euler *e2);
+void compare_vmeta_location(struct vmeta_location *l1,
+			    struct vmeta_location *l2,
+			    bool include_sv_count);
+void compare_proto_location(Vmeta__Location *l1, Vmeta__Location *l2);
+void compare_vmeta_proto_location(struct vmeta_location *l1,
+				  Vmeta__Location *l2,
+				  bool include_sv_count);
+void compare_vmeta_ned(struct vmeta_ned *n1, struct vmeta_ned *n2);
+void compare_proto_ned(Vmeta__NED *n1, Vmeta__NED *n2);
+void compare_vmeta_proto_ned(struct vmeta_ned *n1, Vmeta__NED *n2);
+void compare_proto_vector3(Vmeta__Vector3 *v1, Vmeta__Vector3 *v2);
+void compare_vmeta_thermal_spot(struct vmeta_thermal_spot *t1,
+				struct vmeta_thermal_spot *t2);
+void compare_proto_thermal_spot(Vmeta__ThermalSpot *t1, Vmeta__ThermalSpot *t2);
+void compare_vmeta_proto_thermal_spot(struct vmeta_thermal_spot *t1,
+				      Vmeta__ThermalSpot *t2);
+void compare_proto_bounding_box(Vmeta__BoundingBox *b1, Vmeta__BoundingBox *b2);
+void compare_flying_state(enum vmeta_flying_state f1, Vmeta__FlyingState f2);
+void compare_piloting_mode(enum vmeta_piloting_mode p1, Vmeta__PilotingMode p2);
+void compare_animation_enum(enum vmeta_automation_anim a1, Vmeta__Animation a2);
+void compare_thermal_calib_state(enum vmeta_thermal_calib_state t1,
+				 Vmeta__ThermalCalibrationState t2);
+
+void compare_vmeta_frame_getters(struct vmeta_frame *f1,
+				 struct vmeta_frame *f2);
+void compare_vmeta_frame_v3_getters(struct vmeta_frame *f);
+void compare_vmeta_frame_proto_getters(struct vmeta_frame *f);
+
 
 #endif /* _FUTILS_TEST_H_ */

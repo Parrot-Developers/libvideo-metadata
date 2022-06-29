@@ -341,6 +341,38 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 
 
 /**
+ * Horizontal distance from a first to a second location.
+ * @param loc1: pointer to a first location structure
+ * @param loc2: pointer to a second location structure
+ * @param horizontal_distance: optional pointer to the horizontal distance
+ *                             in meters (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_location_horiz_distance(const struct vmeta_location *loc1,
+					    const struct vmeta_location *loc2,
+					    float *horizontal_distance);
+
+
+/**
+ * Distance, bearing and elevation from a first to a second location.
+ * @param loc1: pointer to a first location structure
+ * @param loc2: pointer to a second location structure
+ * @param distance: optional pointer to the distance in meters (output)
+ * @param horizontal_distance: optional pointer to the horizontal distance
+ *                             in meters (output)
+ * @param bearing: optional pointer to a bearing in radians (output)
+ * @param elevation: optional pointer to an elevation in radians (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_location_delta(const struct vmeta_location *loc1,
+				   const struct vmeta_location *loc2,
+				   float *distance,
+				   float *horizontal_distance,
+				   double *bearing,
+				   double *elevation);
+
+
+/**
  * Get an enum vmeta_camera_type value from a string.
  * Valid strings are only the suffix of the camera type (eg. 'FRONT').
  * The case is ignored.

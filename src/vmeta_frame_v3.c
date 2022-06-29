@@ -111,6 +111,8 @@ int vmeta_frame_v3_write(struct vmeta_buffer *buf,
 		CHECK(vmeta_frame_ext_automation_write(buf, &meta->automation));
 	if (meta->has_thermal)
 		CHECK(vmeta_frame_ext_thermal_write(buf, &meta->thermal));
+	if (meta->has_lfic)
+		CHECK(vmeta_frame_ext_lfic_write(buf, &meta->lfic));
 
 	/* Check again for correct alignment */
 	if ((buf->pos - start) % 4 != 0) {
@@ -257,6 +259,12 @@ int vmeta_frame_v3_read(struct vmeta_buffer *buf, struct vmeta_frame_v3 *meta)
 				meta->has_thermal = 1;
 			break;
 
+		case VMETA_FRAME_EXT_LFIC_ID:
+			res = vmeta_frame_ext_lfic_read(buf, &meta->lfic);
+			if (res == 0)
+				meta->has_lfic = 1;
+			break;
+
 		default:
 			ULOGW("vmeta_frame_v3: unknown extension id: 0x%04x",
 			      id);
@@ -356,6 +364,23 @@ int vmeta_frame_v3_to_json(const struct vmeta_frame_v3 *meta,
 		vmeta_json_add_thermal_spot(
 			jobj_thermal, "probe", &meta->thermal.probe);
 		json_object_object_add(jobj, "thermal", jobj_thermal);
+	}
+
+	if (meta->has_lfic) {
+		struct json_object *jobj_lfic = json_object_new_object();
+		vmeta_json_add_double(
+			jobj_lfic, "target_x", meta->lfic.target_x);
+		vmeta_json_add_double(
+			jobj_lfic, "target_y", meta->lfic.target_y);
+		vmeta_json_add_location(jobj_lfic,
+					"target_location",
+					&meta->lfic.target_location);
+		vmeta_json_add_double(jobj_lfic,
+				      "estimated_precision",
+				      meta->lfic.estimated_precision);
+		vmeta_json_add_double(
+			jobj_lfic, "grid_precision", meta->lfic.grid_precision);
+		json_object_object_add(jobj, "lfic", jobj_lfic);
 	}
 
 	return 0;
@@ -485,6 +510,29 @@ size_t vmeta_frame_v3_to_csv(const struct vmeta_frame_v3 *meta,
 			str + len, maxlen - len, &spot);
 	}
 
+	if (meta->has_lfic) {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				" %.3f %.3f ",
+				meta->lfic.target_x,
+				meta->lfic.target_y);
+		len += vmeta_csv_add_location(
+			str + len, maxlen - len, &meta->lfic.target_location);
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				" %.2lf %.2lf",
+				meta->lfic.estimated_precision,
+				meta->lfic.grid_precision);
+	} else {
+		struct vmeta_location loc;
+		memset(&loc, 0, sizeof(loc));
+		VMETA_STR_PRINT(str + len, len, maxlen - len, " 0.000 0.000");
+		len += vmeta_csv_add_location(str + len, maxlen - len, &loc);
+		VMETA_STR_PRINT(str + len, len, maxlen - len, " 0.00 0.00");
+	}
+
 	return len;
 }
 
@@ -527,7 +575,11 @@ size_t vmeta_frame_v3_csv_header(char *str, size_t maxlen)
 		"thermal_max_valid "
 		"thermal_max_x thermal_max_y thermal_max_temp "
 		"thermal_probe_valid "
-		"thermal_probe_x thermal_probe_y thermal_probe_temp");
+		"thermal_probe_x thermal_probe_y thermal_probe_temp "
+		"lfic_target_x lfic_target_y lfic_target_location_valid "
+		"lfic_target_location_latitude lfic_target_location_longitude "
+		"lfic_target_location_altitude lfic_target_location_sv_count "
+		"lfic_estimated_precision lfic_grid_precision");
 
 	return len;
 }

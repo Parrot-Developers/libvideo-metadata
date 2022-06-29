@@ -523,6 +523,26 @@ vmeta_frame_proto_get_camera_quat(Vmeta__CameraMetadata *camera)
 }
 
 
+Vmeta__Vector3 *
+vmeta_frame_proto_get_camera_local_position(Vmeta__CameraMetadata *camera)
+{
+	Vmeta__Vector3 *local_position;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!camera, EINVAL, NULL);
+
+	if (camera->local_position)
+		return camera->local_position;
+	local_position = calloc(1, sizeof(*local_position));
+	if (!local_position) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__vector3__init(local_position);
+	camera->local_position = local_position;
+	return local_position;
+}
+
+
 Vmeta__DroneMetadata *vmeta_frame_proto_get_drone(Vmeta__TimedMetadata *meta)
 {
 	Vmeta__DroneMetadata *drone;
@@ -831,6 +851,187 @@ vmeta_frame_proto_proposal_add_box(Vmeta__TrackingProposalMetadata *proposal)
 }
 
 
+Vmeta__AutomationMetadata *
+vmeta_frame_proto_get_automation(Vmeta__TimedMetadata *meta)
+{
+	Vmeta__AutomationMetadata *automation;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
+
+	if (meta->automation)
+		return meta->automation;
+
+	automation = calloc(1, sizeof(*automation));
+	if (!automation) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__automation_metadata__init(automation);
+	meta->automation = automation;
+	return automation;
+}
+
+
+Vmeta__Location *vmeta_frame_proto_get_automation_destination(
+	Vmeta__AutomationMetadata *automation)
+{
+	Vmeta__Location *location;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!automation, EINVAL, NULL);
+
+	if (automation->destination)
+		return automation->destination;
+	location = calloc(1, sizeof(*location));
+	if (!location) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__location__init(location);
+	automation->destination = location;
+	return location;
+}
+
+
+Vmeta__Location *vmeta_frame_proto_get_automation_target_location(
+	Vmeta__AutomationMetadata *automation)
+{
+	Vmeta__Location *location;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!automation, EINVAL, NULL);
+
+	if (automation->target_location)
+		return automation->target_location;
+	location = calloc(1, sizeof(*location));
+	if (!location) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__location__init(location);
+	automation->target_location = location;
+	return location;
+}
+
+
+Vmeta__ThermalMetadata *
+vmeta_frame_proto_get_thermal(Vmeta__TimedMetadata *meta)
+{
+	Vmeta__ThermalMetadata *thermal;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
+
+	if (meta->thermal)
+		return meta->thermal;
+
+	thermal = calloc(1, sizeof(*thermal));
+	if (!thermal) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__thermal_metadata__init(thermal);
+	meta->thermal = thermal;
+	return thermal;
+}
+
+
+Vmeta__ThermalSpot *
+vmeta_frame_proto_get_thermal_min(Vmeta__ThermalMetadata *thermal)
+{
+	Vmeta__ThermalSpot *spot;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!thermal, EINVAL, NULL);
+
+	if (thermal->min)
+		return thermal->min;
+	spot = calloc(1, sizeof(*spot));
+	if (!spot) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__thermal_spot__init(spot);
+	thermal->min = spot;
+	return spot;
+}
+
+
+Vmeta__ThermalSpot *
+vmeta_frame_proto_get_thermal_max(Vmeta__ThermalMetadata *thermal)
+{
+	Vmeta__ThermalSpot *spot;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!thermal, EINVAL, NULL);
+
+	if (thermal->max)
+		return thermal->max;
+	spot = calloc(1, sizeof(*spot));
+	if (!spot) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__thermal_spot__init(spot);
+	thermal->max = spot;
+	return spot;
+}
+
+
+Vmeta__ThermalSpot *
+vmeta_frame_proto_get_thermal_probe(Vmeta__ThermalMetadata *thermal)
+{
+	Vmeta__ThermalSpot *spot;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!thermal, EINVAL, NULL);
+
+	if (thermal->probe)
+		return thermal->probe;
+	spot = calloc(1, sizeof(*spot));
+	if (!spot) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__thermal_spot__init(spot);
+	thermal->probe = spot;
+	return spot;
+}
+
+
+Vmeta__LFICMetadata *vmeta_frame_proto_get_lfic(Vmeta__TimedMetadata *meta)
+{
+	Vmeta__LFICMetadata *lfic;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
+
+	if (meta->lfic)
+		return meta->lfic;
+
+	lfic = calloc(1, sizeof(*lfic));
+	if (!lfic) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__lficmetadata__init(lfic);
+	meta->lfic = lfic;
+	return lfic;
+}
+
+
+Vmeta__Location *vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic)
+{
+	Vmeta__Location *location;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!lfic, EINVAL, NULL);
+
+	if (lfic->location)
+		return lfic->location;
+	location = calloc(1, sizeof(*location));
+	if (!location) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__location__init(location);
+	lfic->location = location;
+	return location;
+}
+
+
 ssize_t vmeta_frame_proto_get_packed_size(struct vmeta_frame *meta)
 {
 	ssize_t ret;
@@ -876,6 +1077,282 @@ vmeta_frame_flying_state_proto_to_vmeta(Vmeta__FlyingState state)
 		break;
 	case VMETA__FLYING_STATE__FS_EMERGENCY:
 		out = VMETA_FLYING_STATE_EMERGENCY;
+		break;
+	case VMETA__FLYING_STATE__FS_USER_TAKEOFF:
+		out = VMETA_FLYING_STATE_USER_TAKEOFF;
+		break;
+	case VMETA__FLYING_STATE__FS_MOTOR_RAMPING:
+		out = VMETA_FLYING_STATE_MOTOR_RAMPING;
+		break;
+	case VMETA__FLYING_STATE__FS_EMERGENCY_LANDING:
+		out = VMETA_FLYING_STATE_EMERGENCY_LANDING;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+Vmeta__FlyingState
+vmeta_frame_flying_state_vmeta_to_proto(enum vmeta_flying_state state)
+{
+	Vmeta__FlyingState out = VMETA__FLYING_STATE__FS_LANDED;
+	switch (state) {
+	case VMETA_FLYING_STATE_LANDED:
+		out = VMETA__FLYING_STATE__FS_LANDED;
+		break;
+	case VMETA_FLYING_STATE_TAKINGOFF:
+		out = VMETA__FLYING_STATE__FS_TAKINGOFF;
+		break;
+	case VMETA_FLYING_STATE_HOVERING:
+		out = VMETA__FLYING_STATE__FS_HOVERING;
+		break;
+	case VMETA_FLYING_STATE_FLYING:
+		out = VMETA__FLYING_STATE__FS_FLYING;
+		break;
+	case VMETA_FLYING_STATE_LANDING:
+		out = VMETA__FLYING_STATE__FS_LANDING;
+		break;
+	case VMETA_FLYING_STATE_EMERGENCY:
+		out = VMETA__FLYING_STATE__FS_EMERGENCY;
+		break;
+	case VMETA_FLYING_STATE_USER_TAKEOFF:
+		out = VMETA__FLYING_STATE__FS_USER_TAKEOFF;
+		break;
+	case VMETA_FLYING_STATE_MOTOR_RAMPING:
+		out = VMETA__FLYING_STATE__FS_MOTOR_RAMPING;
+		break;
+	case VMETA_FLYING_STATE_EMERGENCY_LANDING:
+		out = VMETA__FLYING_STATE__FS_EMERGENCY_LANDING;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+enum vmeta_piloting_mode
+vmeta_frame_piloting_mode_proto_to_vmeta(Vmeta__PilotingMode mode)
+{
+	enum vmeta_piloting_mode out = VMETA_PILOTING_MODE_MANUAL;
+	switch (mode) {
+	case VMETA__PILOTING_MODE__PM_UNKNOWN:
+		out = VMETA_PILOTING_MODE_UNKNOWN;
+		break;
+	case VMETA__PILOTING_MODE__PM_MANUAL:
+		out = VMETA_PILOTING_MODE_MANUAL;
+		break;
+	case VMETA__PILOTING_MODE__PM_RETURN_HOME:
+		out = VMETA_PILOTING_MODE_RETURN_HOME;
+		break;
+	case VMETA__PILOTING_MODE__PM_FLIGHT_PLAN:
+		out = VMETA_PILOTING_MODE_FLIGHT_PLAN;
+		break;
+	case VMETA__PILOTING_MODE__PM_TRACKING:
+		out = VMETA_PILOTING_MODE_TRACKING;
+		break;
+	case VMETA__PILOTING_MODE__PM_MOVETO:
+		out = VMETA_PILOTING_MODE_MOVE_TO;
+		break;
+	case VMETA__PILOTING_MODE__PM_MAGIC_CARPET:
+		out = VMETA_PILOTING_MODE_MAGIC_CARPET;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+Vmeta__PilotingMode
+vmeta_frame_piloting_mode_vmeta_to_proto(enum vmeta_piloting_mode mode)
+{
+	Vmeta__PilotingMode out = VMETA__PILOTING_MODE__PM_UNKNOWN;
+	switch (mode) {
+	case VMETA_PILOTING_MODE_MANUAL:
+		out = VMETA__PILOTING_MODE__PM_MANUAL;
+		break;
+	case VMETA_PILOTING_MODE_RETURN_HOME:
+		out = VMETA__PILOTING_MODE__PM_RETURN_HOME;
+		break;
+	case VMETA_PILOTING_MODE_FLIGHT_PLAN:
+		out = VMETA__PILOTING_MODE__PM_FLIGHT_PLAN;
+		break;
+	case VMETA_PILOTING_MODE_TRACKING:
+		out = VMETA__PILOTING_MODE__PM_TRACKING;
+		break;
+	case VMETA_PILOTING_MODE_MOVE_TO:
+		out = VMETA__PILOTING_MODE__PM_MOVETO;
+		break;
+	case VMETA_PILOTING_MODE_MAGIC_CARPET:
+		out = VMETA__PILOTING_MODE__PM_MAGIC_CARPET;
+		break;
+	case VMETA_PILOTING_MODE_UNKNOWN:
+		out = VMETA__PILOTING_MODE__PM_UNKNOWN;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+enum vmeta_automation_anim
+vmeta_frame_automation_anim_proto_to_vmeta(Vmeta__Animation anim)
+{
+	enum vmeta_automation_anim out = VMETA_AUTOMATION_ANIM_NONE;
+	switch (anim) {
+	case VMETA__ANIMATION__ANIM_NONE:
+		out = VMETA_AUTOMATION_ANIM_NONE;
+		break;
+	case VMETA__ANIMATION__ANIM_ORBIT:
+		out = VMETA_AUTOMATION_ANIM_ORBIT;
+		break;
+	case VMETA__ANIMATION__ANIM_BOOMERANG:
+		out = VMETA_AUTOMATION_ANIM_BOOMERANG;
+		break;
+	case VMETA__ANIMATION__ANIM_PARABOLA:
+		out = VMETA_AUTOMATION_ANIM_PARABOLA;
+		break;
+	case VMETA__ANIMATION__ANIM_DOLLY_SLIDE:
+		out = VMETA_AUTOMATION_ANIM_DOLLY_SLIDE;
+		break;
+	case VMETA__ANIMATION__ANIM_DOLLY_ZOOM:
+		out = VMETA_AUTOMATION_ANIM_DOLLY_ZOOM;
+		break;
+	case VMETA__ANIMATION__ANIM_REVEAL_VERT:
+		out = VMETA_AUTOMATION_ANIM_REVEAL_VERT;
+		break;
+	case VMETA__ANIMATION__ANIM_REVEAL_HORIZ:
+		out = VMETA_AUTOMATION_ANIM_REVEAL_HORZ;
+		break;
+	case VMETA__ANIMATION__ANIM_PANO_HORIZ:
+		out = VMETA_AUTOMATION_ANIM_PANORAMA_HORZ;
+		break;
+	case VMETA__ANIMATION__ANIM_CANDLE:
+		out = VMETA_AUTOMATION_ANIM_CANDLE;
+		break;
+	case VMETA__ANIMATION__ANIM_FLIP_FRONT:
+		out = VMETA_AUTOMATION_ANIM_FLIP_FRONT;
+		break;
+	case VMETA__ANIMATION__ANIM_FLIP_BACK:
+		out = VMETA_AUTOMATION_ANIM_FLIP_BACK;
+		break;
+	case VMETA__ANIMATION__ANIM_FLIP_LEFT:
+		out = VMETA_AUTOMATION_ANIM_FLIP_LEFT;
+		break;
+	case VMETA__ANIMATION__ANIM_FLIP_RIGHT:
+		out = VMETA_AUTOMATION_ANIM_FLIP_RIGHT;
+		break;
+	case VMETA__ANIMATION__ANIM_TWISTUP:
+		out = VMETA_AUTOMATION_ANIM_TWISTUP;
+		break;
+	case VMETA__ANIMATION__ANIM_POSITION_TWISTUP:
+		out = VMETA_AUTOMATION_ANIM_POSITION_TWISTUP;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+Vmeta__Animation
+vmeta_frame_automation_anim_vmeta_to_proto(enum vmeta_automation_anim anim)
+{
+	Vmeta__Animation out = VMETA__ANIMATION__ANIM_NONE;
+	switch (anim) {
+	case VMETA_AUTOMATION_ANIM_NONE:
+		out = VMETA__ANIMATION__ANIM_NONE;
+		break;
+	case VMETA_AUTOMATION_ANIM_ORBIT:
+		out = VMETA__ANIMATION__ANIM_ORBIT;
+		break;
+	case VMETA_AUTOMATION_ANIM_BOOMERANG:
+		out = VMETA__ANIMATION__ANIM_BOOMERANG;
+		break;
+	case VMETA_AUTOMATION_ANIM_PARABOLA:
+		out = VMETA__ANIMATION__ANIM_PARABOLA;
+		break;
+	case VMETA_AUTOMATION_ANIM_DOLLY_SLIDE:
+		out = VMETA__ANIMATION__ANIM_DOLLY_SLIDE;
+		break;
+	case VMETA_AUTOMATION_ANIM_DOLLY_ZOOM:
+		out = VMETA__ANIMATION__ANIM_DOLLY_ZOOM;
+		break;
+	case VMETA_AUTOMATION_ANIM_REVEAL_VERT:
+		out = VMETA__ANIMATION__ANIM_REVEAL_VERT;
+		break;
+	case VMETA_AUTOMATION_ANIM_REVEAL_HORZ:
+		out = VMETA__ANIMATION__ANIM_REVEAL_HORIZ;
+		break;
+	case VMETA_AUTOMATION_ANIM_PANORAMA_HORZ:
+		out = VMETA__ANIMATION__ANIM_PANO_HORIZ;
+		break;
+	case VMETA_AUTOMATION_ANIM_CANDLE:
+		out = VMETA__ANIMATION__ANIM_CANDLE;
+		break;
+	case VMETA_AUTOMATION_ANIM_FLIP_FRONT:
+		out = VMETA__ANIMATION__ANIM_FLIP_FRONT;
+		break;
+	case VMETA_AUTOMATION_ANIM_FLIP_BACK:
+		out = VMETA__ANIMATION__ANIM_FLIP_BACK;
+		break;
+	case VMETA_AUTOMATION_ANIM_FLIP_LEFT:
+		out = VMETA__ANIMATION__ANIM_FLIP_LEFT;
+		break;
+	case VMETA_AUTOMATION_ANIM_FLIP_RIGHT:
+		out = VMETA__ANIMATION__ANIM_FLIP_RIGHT;
+		break;
+	case VMETA_AUTOMATION_ANIM_TWISTUP:
+		out = VMETA__ANIMATION__ANIM_TWISTUP;
+		break;
+	case VMETA_AUTOMATION_ANIM_POSITION_TWISTUP:
+		out = VMETA__ANIMATION__ANIM_POSITION_TWISTUP;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+enum vmeta_thermal_calib_state vmeta_frame_thermal_calib_state_proto_to_vmeta(
+	Vmeta__ThermalCalibrationState state)
+{
+	enum vmeta_thermal_calib_state out = VMETA_THERMAL_CALIB_STATE_DONE;
+	switch (state) {
+	case VMETA__THERMAL_CALIBRATION_STATE__TCS_DONE:
+		out = VMETA_THERMAL_CALIB_STATE_DONE;
+		break;
+	case VMETA__THERMAL_CALIBRATION_STATE__TCS_REQUESTED:
+		out = VMETA_THERMAL_CALIB_STATE_REQUESTED;
+		break;
+	case VMETA__THERMAL_CALIBRATION_STATE__TCS_IN_PROGRESS:
+		out = VMETA_THERMAL_CALIB_STATE_IN_PROGRESS;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+Vmeta__ThermalCalibrationState vmeta_frame_thermal_calib_state_vmeta_to_proto(
+	enum vmeta_thermal_calib_state state)
+{
+	Vmeta__ThermalCalibrationState out =
+		VMETA__THERMAL_CALIBRATION_STATE__TCS_DONE;
+	switch (state) {
+	case VMETA_THERMAL_CALIB_STATE_DONE:
+		out = VMETA__THERMAL_CALIBRATION_STATE__TCS_DONE;
+		break;
+	case VMETA_THERMAL_CALIB_STATE_REQUESTED:
+		out = VMETA__THERMAL_CALIBRATION_STATE__TCS_REQUESTED;
+		break;
+	case VMETA_THERMAL_CALIB_STATE_IN_PROGRESS:
+		out = VMETA__THERMAL_CALIBRATION_STATE__TCS_IN_PROGRESS;
 		break;
 	default:
 		break;

@@ -73,6 +73,7 @@ const char *vmeta_piloting_mode_str(enum vmeta_piloting_mode val)
 		return "MAGIC_CARPET";
 	case VMETA_PILOTING_MODE_MOVE_TO:
 		return "MOVE_TO";
+	case VMETA_PILOTING_MODE_UNKNOWN:
 	default:
 		return "UNKNOWN";
 	}
@@ -169,6 +170,8 @@ const char *vmeta_frame_type_str(enum vmeta_frame_type val)
 		return "V2";
 	case VMETA_FRAME_TYPE_V3:
 		return "V3";
+	case VMETA_FRAME_TYPE_PROTO:
+		return "PROTO";
 	default:
 		return "UNKNOWN";
 	}
@@ -225,6 +228,15 @@ int vmeta_frame_write(struct vmeta_buffer *buf, struct vmeta_frame *meta)
 int vmeta_frame_read(struct vmeta_buffer *buf,
 		     const char *mime_type,
 		     struct vmeta_frame **ret_obj)
+{
+	return vmeta_frame_read2(buf, mime_type, 1, ret_obj);
+}
+
+
+int vmeta_frame_read2(struct vmeta_buffer *buf,
+		      const char *mime_type,
+		      int convert,
+		      struct vmeta_frame **ret_obj)
 {
 	int res = 0;
 	size_t start = 0, len = 0;
@@ -342,6 +354,22 @@ int vmeta_frame_read(struct vmeta_buffer *buf,
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
+	}
+
+	if (res != 0 || convert == 0)
+		goto out;
+	/* Convert metadata to PROTO */
+	if (meta->type != VMETA_FRAME_TYPE_PROTO) {
+		struct vmeta_frame *proto = NULL;
+		res = vmeta_frame_convert(meta, &proto, VMETA_FRAME_TYPE_PROTO);
+		if (res != 0) {
+			/* If the conversion failed, return the non-converted
+			 * metadata */
+			res = 0;
+			goto out;
+		}
+		vmeta_frame_unref(meta);
+		meta = proto;
 	}
 
 out:
@@ -1133,5 +1161,381 @@ int vmeta_frame_ext_thermal_read(struct vmeta_buffer *buf,
 	}
 
 out:
+	return res;
+}
+
+
+int vmeta_frame_ext_lfic_write(struct vmeta_buffer *buf,
+			       const struct vmeta_frame_ext_lfic *meta)
+{
+	int res = 0;
+	size_t start = 0, end = 0;
+	uint16_t len = 0;
+	struct vmeta_location target;
+	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+
+	/* Remember start position */
+	start = buf->pos;
+
+	/* Adjust target if needed */
+	vmeta_location_adjust_write(&meta->target_location, &target);
+
+	/* Write fields */
+	CHECK(vmeta_write_u16(buf, 0)); /* temp value, updated later */
+	CHECK(vmeta_write_u16(buf, 0)); /* temp value, updated later */
+	CHECK(vmeta_write_f32_u16(buf, meta->target_x, 14));
+	CHECK(vmeta_write_f32_u16(buf, meta->target_y, 14));
+	CHECK(vmeta_write_f64_i32(buf, target.latitude, 22));
+	CHECK(vmeta_write_f64_i32(buf, target.longitude, 22));
+	CHECK(vmeta_write_f64_i32(buf, target.altitude, 16));
+	CHECK(vmeta_write_f64_u32(buf, meta->estimated_precision, 16));
+	CHECK(vmeta_write_f64_u32(buf, meta->grid_precision, 16));
+
+	/* Check for correct alignment */
+	if ((buf->pos - start) % 4 != 0) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: buffer not aligned: %zu",
+		      buf->pos - start);
+		goto out;
+	}
+
+	/* Write id and length */
+	end = buf->pos;
+	len = (buf->pos - start - 4) / 4;
+	buf->pos = start;
+	CHECK(vmeta_write_u16(buf, VMETA_FRAME_EXT_LFIC_ID));
+	CHECK(vmeta_write_u16(buf, len));
+	buf->pos = end;
+
+out:
+	return res;
+}
+
+
+int vmeta_frame_ext_lfic_read(struct vmeta_buffer *buf,
+			      struct vmeta_frame_ext_lfic *meta)
+{
+	int res = 0;
+	size_t start = 0;
+	uint16_t id = 0, len = 0;
+	struct vmeta_location target;
+
+	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+
+	/* Get buffer start */
+	start = buf->pos;
+
+	/* Read Id */
+	CHECK(vmeta_read_u16(buf, &id));
+	if (id != VMETA_FRAME_EXT_LFIC_ID) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: bad id: 0x%04x (0x%04x)",
+		      id,
+		      VMETA_FRAME_EXT_LFIC_ID);
+		goto out;
+	}
+
+	/* Read len */
+	CHECK(vmeta_read_u16(buf, &len));
+	if (buf->len - start < (size_t)len * 4 + 4) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: bad length: %zu (%u)",
+		      buf->len - start,
+		      len * 4 + 4);
+		goto out;
+	}
+
+	/* Read fields */
+	memset(meta, 0, sizeof(*meta));
+	memset(&target, 0, sizeof(target));
+	CHECK(vmeta_read_f32_u16(buf, &meta->target_x, 14));
+	CHECK(vmeta_read_f32_u16(buf, &meta->target_y, 14));
+	CHECK(vmeta_read_f64_i32(buf, &target.latitude, 22));
+	CHECK(vmeta_read_f64_i32(buf, &target.longitude, 22));
+	CHECK(vmeta_read_f64_i32(buf, &target.altitude, 16));
+	CHECK(vmeta_read_f64_u32(buf, &meta->estimated_precision, 16));
+	CHECK(vmeta_read_f64_u32(buf, &meta->grid_precision, 16));
+
+	/* Adjust target if needed */
+	vmeta_location_adjust_read(&target, &meta->target_location);
+	meta->target_location.sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
+
+	/* Make sure we read the correct number of bytes */
+	if (buf->pos - start != (size_t)len * 4 + 4) {
+		res = -EPROTO;
+		ULOGE("vmeta_frame_ext: bad length: %zu (%u)",
+		      buf->pos - start,
+		      len * 4 + 4);
+		goto out;
+	}
+
+out:
+	return res;
+}
+
+
+int vmeta_frame_convert(struct vmeta_frame *in_frame,
+			struct vmeta_frame **out_frame,
+			enum vmeta_frame_type out_type)
+{
+	int res;
+	struct vmeta_frame *new = NULL;
+	Vmeta__TimedMetadata *proto = NULL;
+	Vmeta__DroneMetadata *drone;
+	Vmeta__CameraMetadata *camera;
+	Vmeta__WifiLinkMetadata *wifi;
+	Vmeta__AutomationMetadata *automation;
+	Vmeta__ThermalMetadata *thermal;
+	Vmeta__LFICMetadata *lfic;
+	Vmeta__Quaternion *quat;
+	Vmeta__Location *loc;
+	Vmeta__NED *ned;
+	Vmeta__ThermalSpot *spot;
+	ULOG_ERRNO_RETURN_ERR_IF(in_frame == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(out_frame == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(in_frame->type != VMETA_FRAME_TYPE_V3, ENOSYS);
+	ULOG_ERRNO_RETURN_ERR_IF(out_type != VMETA_FRAME_TYPE_PROTO, ENOSYS);
+
+	/* For now, this function only converts from v3 to proto, so no need to
+	 * test in_frame->type & out_type here since they are checked in the
+	 * ULOG_ERRNO_RETURN_ERR_IF(...) blocks */
+
+	res = vmeta_frame_new(out_type, &new);
+	if (res != 0)
+		goto out;
+
+	/* Get the output metadata */
+	res = vmeta_frame_proto_get_unpacked_rw(new, &proto);
+	if (res != 0)
+		goto out;
+
+	drone = vmeta_frame_proto_get_drone(proto);
+	if (drone == NULL)
+		goto out;
+
+	camera = vmeta_frame_proto_get_camera(proto);
+	if (camera == NULL)
+		goto out;
+
+	wifi = vmeta_frame_proto_add_wifi_link(proto);
+	if (wifi == NULL)
+		goto out;
+
+	/* Convert v3.base */
+	{
+		struct vmeta_frame_v3_base *base = &in_frame->v3.base;
+		/* drone quat */
+		quat = vmeta_frame_proto_get_drone_quat(drone);
+		if (quat == NULL)
+			goto out;
+		quat->w = base->drone_quat.w;
+		quat->x = base->drone_quat.x;
+		quat->y = base->drone_quat.y;
+		quat->z = base->drone_quat.z;
+		/* location */
+		if (base->location.valid) {
+			loc = vmeta_frame_proto_get_drone_location(drone);
+			if (loc == NULL)
+				goto out;
+			loc->altitude = base->location.altitude;
+			loc->latitude = base->location.latitude;
+			loc->longitude = base->location.longitude;
+			loc->horizontal_accuracy =
+				base->location.horizontal_accuracy;
+			loc->vertical_accuracy =
+				base->location.vertical_accuracy;
+			loc->sv_count = base->location.sv_count;
+		}
+		/* ground_distance */
+		drone->ground_distance = base->ground_distance;
+		/* speed */
+		ned = vmeta_frame_proto_get_drone_speed(drone);
+		if (ned == NULL)
+			goto out;
+		ned->north = base->speed.north;
+		ned->east = base->speed.east;
+		ned->down = base->speed.down;
+		/* air_speed omitted in proto metadata */
+		/* frame_base_quat */
+		quat = vmeta_frame_proto_get_camera_base_quat(camera);
+		if (quat == NULL)
+			goto out;
+		quat->w = base->frame_base_quat.w;
+		quat->x = base->frame_base_quat.x;
+		quat->y = base->frame_base_quat.y;
+		quat->z = base->frame_base_quat.z;
+		/* frame_quat */
+		quat = vmeta_frame_proto_get_camera_quat(camera);
+		if (quat == NULL)
+			goto out;
+		quat->w = base->frame_quat.w;
+		quat->x = base->frame_quat.x;
+		quat->y = base->frame_quat.y;
+		quat->z = base->frame_quat.z;
+		/* exposure_time */
+		camera->exposure_time = base->exposure_time;
+		/* gain */
+		camera->iso_gain = base->gain;
+		/* awb_r_gain */
+		camera->awb_r_gain = base->awb_r_gain;
+		/* awb_b_gain */
+		camera->awb_b_gain = base->awb_b_gain;
+		/* picture_hfov, deg->rad */
+		camera->hfov = base->picture_hfov * M_PI / 180.;
+		/* picture_vfov, deg->rad */
+		camera->vfov = base->picture_vfov * M_PI / 180.;
+		/* link_goodput */
+		wifi->goodput = base->link_goodput;
+		/* link_quality */
+		wifi->quality = base->link_quality;
+		/* wifi_rssi */
+		wifi->rssi = base->wifi_rssi;
+		/* battery_percentage */
+		drone->battery_percentage = base->battery_percentage;
+		/* animation */
+		drone->animation_in_progress = base->animation;
+		/* state */
+		drone->flying_state =
+			vmeta_frame_flying_state_vmeta_to_proto(base->state);
+		/* mode */
+		drone->piloting_mode =
+			vmeta_frame_piloting_mode_vmeta_to_proto(base->mode);
+	}
+
+	/* Convert v3.timestamp */
+	if (in_frame->v3.has_timestamp)
+		camera->timestamp = in_frame->v3.timestamp.frame_timestamp;
+
+	/* Convert v3.automation */
+	if (in_frame->v3.has_automation) {
+		struct vmeta_frame_ext_automation *automationv3 =
+			&in_frame->v3.automation;
+		automation = vmeta_frame_proto_get_automation(proto);
+		if (automation == NULL)
+			goto out;
+		/* framing_target */
+		if (automationv3->framing_target.valid) {
+			loc = vmeta_frame_proto_get_automation_target_location(
+				automation);
+			if (loc == NULL)
+				goto out;
+			loc->altitude = automationv3->framing_target.altitude;
+			loc->latitude = automationv3->framing_target.latitude;
+			loc->longitude = automationv3->framing_target.longitude;
+			loc->horizontal_accuracy = automationv3->framing_target
+							   .horizontal_accuracy;
+			loc->vertical_accuracy =
+				automationv3->framing_target.vertical_accuracy;
+			loc->sv_count = automationv3->framing_target.sv_count;
+		}
+		/* flight_destination */
+		if (automationv3->flight_destination.valid) {
+			loc = vmeta_frame_proto_get_automation_destination(
+				automation);
+			if (loc == NULL)
+				goto out;
+			loc->altitude =
+				automationv3->flight_destination.altitude;
+			loc->latitude =
+				automationv3->flight_destination.latitude;
+			loc->longitude =
+				automationv3->flight_destination.longitude;
+			loc->horizontal_accuracy =
+				automationv3->flight_destination
+					.horizontal_accuracy;
+			loc->vertical_accuracy =
+				automationv3->flight_destination
+					.vertical_accuracy;
+			loc->sv_count =
+				automationv3->flight_destination.sv_count;
+		}
+		/* followme_enabled */
+		automation->follow_me = automationv3->followme_enabled;
+		/* lookatme_enabled */
+		automation->lookat_me = automationv3->lookatme_enabled;
+		/* angle_locked */
+		automation->angle_locked = automationv3->angle_locked;
+		/* animation */
+		automation->animation =
+			vmeta_frame_automation_anim_vmeta_to_proto(
+				automationv3->animation);
+	}
+
+	/* Convert v3.thermal */
+	if (in_frame->v3.has_thermal) {
+		struct vmeta_frame_ext_thermal *thermalv3 =
+			&in_frame->v3.thermal;
+		thermal = vmeta_frame_proto_get_thermal(proto);
+		if (thermal == NULL)
+			goto out;
+		/* calib_state */
+		thermal->calibration_state =
+			vmeta_frame_thermal_calib_state_vmeta_to_proto(
+				thermalv3->calib_state);
+		/* min */
+		if (thermalv3->min.valid) {
+			spot = vmeta_frame_proto_get_thermal_min(thermal);
+			if (spot == NULL)
+				goto out;
+			spot->x = thermalv3->min.x;
+			spot->y = thermalv3->min.y;
+			spot->temp = thermalv3->min.temp;
+		}
+		/* max */
+		if (thermalv3->max.valid) {
+			spot = vmeta_frame_proto_get_thermal_max(thermal);
+			if (spot == NULL)
+				goto out;
+			spot->x = thermalv3->max.x;
+			spot->y = thermalv3->max.y;
+			spot->temp = thermalv3->max.temp;
+		}
+		/* probe */
+		if (thermalv3->probe.valid) {
+			spot = vmeta_frame_proto_get_thermal_probe(thermal);
+			if (spot == NULL)
+				goto out;
+			spot->x = thermalv3->probe.x;
+			spot->y = thermalv3->probe.y;
+			spot->temp = thermalv3->probe.temp;
+		}
+	}
+
+	/* Convert v3.lfic */
+	if (in_frame->v3.has_lfic) {
+		struct vmeta_frame_ext_lfic *lficv3 = &in_frame->v3.lfic;
+		lfic = vmeta_frame_proto_get_lfic(proto);
+		if (lfic == NULL)
+			goto out;
+		/* target_x */
+		lfic->x = lficv3->target_x;
+		/* target_y */
+		lfic->y = lficv3->target_y;
+		/* target_location + estimated_precision */
+		if (lficv3->target_location.valid) {
+			loc = vmeta_frame_proto_get_lfic_location(lfic);
+			if (loc == NULL)
+				goto out;
+			loc->altitude = lficv3->target_location.altitude;
+			loc->latitude = lficv3->target_location.latitude;
+			loc->longitude = lficv3->target_location.longitude;
+			loc->horizontal_accuracy = lficv3->estimated_precision;
+			loc->vertical_accuracy = lficv3->estimated_precision;
+			loc->sv_count = lficv3->target_location.sv_count;
+		}
+		/* grid_precision */
+		lfic->grid_precision = lficv3->grid_precision;
+	}
+
+
+out:
+	if (proto != NULL)
+		vmeta_frame_proto_release_unpacked_rw(new, proto);
+	if (res == 0)
+		*out_frame = new;
+	else
+		vmeta_frame_unref(new);
 	return res;
 }

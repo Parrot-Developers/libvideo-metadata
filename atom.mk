@@ -101,7 +101,7 @@ LOCAL_DESCRIPTION := Parrot Drones video metadata json to csv converter
 LOCAL_CATEGORY_PATH := multimedia
 LOCAL_SRC_FILES := tools/vmeta_json_to_csv.py
 
-LOCAL_COPY_FILES := $(LOCAL_SRC_FILES:=:usr/bin/)
+LOCAL_COPY_FILES := tools/vmeta_json_to_csv.py:usr/bin/$(LOCAL_MODULE).py
 
 include $(BUILD_CUSTOM)
 
@@ -114,8 +114,10 @@ LOCAL_C_INCLUDES := $(LOCAL_PATH)/src
 
 LOCAL_SRC_FILES := \
 	tests/vmeta_test.c \
+	tests/vmeta_test_compare.c \
 	tests/vmeta_test_proto.c \
-	tests/vmeta_test_utils.c
+	tests/vmeta_test_utils.c \
+	tests/vmeta_test_v3.c
 
 LOCAL_LIBRARIES := \
 	libcunit \
