@@ -81,6 +81,9 @@ void compare_vmeta_proto_location(struct vmeta_location *l1,
 void compare_vmeta_ned(struct vmeta_ned *n1, struct vmeta_ned *n2);
 void compare_proto_ned(Vmeta__NED *n1, Vmeta__NED *n2);
 void compare_vmeta_proto_ned(struct vmeta_ned *n1, Vmeta__NED *n2);
+void compare_vmeta_xy(struct vmeta_xy *v1, struct vmeta_xy *v2);
+void compare_proto_vector2(Vmeta__Vector2 *v1, Vmeta__Vector2 *v2);
+void compare_vmeta_proto_xy(struct vmeta_xy *v1, Vmeta__Vector2 *v2);
 void compare_proto_vector3(Vmeta__Vector3 *v1, Vmeta__Vector3 *v2);
 void compare_vmeta_thermal_spot(struct vmeta_thermal_spot *t1,
 				struct vmeta_thermal_spot *t2);

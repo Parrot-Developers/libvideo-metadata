@@ -813,7 +813,7 @@ int vmeta_frame_ext_followme_write(struct vmeta_buffer *buf,
 	CHECK(vmeta_write_u16(buf, 0)); /* temp value, updated later */
 	CHECK(vmeta_write_f64_i32(buf, target.latitude, 22));
 	CHECK(vmeta_write_f64_i32(buf, target.longitude, 22));
-	CHECK(vmeta_write_f64_i32(buf, target.altitude, 16));
+	CHECK(vmeta_write_f64_i32(buf, target.altitude_egm96amsl, 16));
 
 	mode = meta->enabled | (meta->mode << 1) | (meta->angle_locked << 2);
 	anim = meta->animation;
@@ -886,7 +886,7 @@ int vmeta_frame_ext_followme_read(struct vmeta_buffer *buf,
 	memset(&target, 0, sizeof(target));
 	CHECK(vmeta_read_f64_i32(buf, &target.latitude, 22));
 	CHECK(vmeta_read_f64_i32(buf, &target.longitude, 22));
-	CHECK(vmeta_read_f64_i32(buf, &target.altitude, 16));
+	CHECK(vmeta_read_f64_i32(buf, &target.altitude_egm96amsl, 16));
 	CHECK(vmeta_read_u8(buf, &mode));
 	CHECK(vmeta_read_u8(buf, &anim));
 	meta->enabled = mode & 0x1;
@@ -899,6 +899,7 @@ int vmeta_frame_ext_followme_read(struct vmeta_buffer *buf,
 	CHECK(vmeta_read_u32(buf, &reserved4));
 
 	/* Adjust target if needed */
+	target.altitude_wgs84ellipsoid = NAN;
 	vmeta_location_adjust_read(&target, &meta->target);
 	meta->target.sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
 
@@ -942,10 +943,11 @@ int vmeta_frame_ext_automation_write(
 	CHECK(vmeta_write_u16(buf, 0)); /* temp value, updated later */
 	CHECK(vmeta_write_f64_i32(buf, framing_target.latitude, 22));
 	CHECK(vmeta_write_f64_i32(buf, framing_target.longitude, 22));
-	CHECK(vmeta_write_f64_i32(buf, framing_target.altitude, 16));
+	CHECK(vmeta_write_f64_i32(buf, framing_target.altitude_egm96amsl, 16));
 	CHECK(vmeta_write_f64_i32(buf, flight_destination.latitude, 22));
 	CHECK(vmeta_write_f64_i32(buf, flight_destination.longitude, 22));
-	CHECK(vmeta_write_f64_i32(buf, flight_destination.altitude, 16));
+	CHECK(vmeta_write_f64_i32(
+		buf, flight_destination.altitude_egm96amsl, 16));
 
 	anim = meta->animation;
 	flags = meta->followme_enabled | (meta->lookatme_enabled << 1) |
@@ -1016,10 +1018,11 @@ int vmeta_frame_ext_automation_read(struct vmeta_buffer *buf,
 	memset(&flight_destination, 0, sizeof(flight_destination));
 	CHECK(vmeta_read_f64_i32(buf, &framing_target.latitude, 22));
 	CHECK(vmeta_read_f64_i32(buf, &framing_target.longitude, 22));
-	CHECK(vmeta_read_f64_i32(buf, &framing_target.altitude, 16));
+	CHECK(vmeta_read_f64_i32(buf, &framing_target.altitude_egm96amsl, 16));
 	CHECK(vmeta_read_f64_i32(buf, &flight_destination.latitude, 22));
 	CHECK(vmeta_read_f64_i32(buf, &flight_destination.longitude, 22));
-	CHECK(vmeta_read_f64_i32(buf, &flight_destination.altitude, 16));
+	CHECK(vmeta_read_f64_i32(
+		buf, &flight_destination.altitude_egm96amsl, 16));
 	CHECK(vmeta_read_u8(buf, &anim));
 	CHECK(vmeta_read_u8(buf, &flags));
 	meta->followme_enabled = flags & 0x1;
@@ -1029,8 +1032,10 @@ int vmeta_frame_ext_automation_read(struct vmeta_buffer *buf,
 	CHECK(vmeta_read_u16(buf, &reserved));
 
 	/* Adjust targets if needed */
+	framing_target.altitude_wgs84ellipsoid = NAN;
 	vmeta_location_adjust_read(&framing_target, &meta->framing_target);
 	meta->framing_target.sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
+	flight_destination.altitude_wgs84ellipsoid = NAN;
 	vmeta_location_adjust_read(&flight_destination,
 				   &meta->flight_destination);
 	meta->flight_destination.sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
@@ -1188,7 +1193,7 @@ int vmeta_frame_ext_lfic_write(struct vmeta_buffer *buf,
 	CHECK(vmeta_write_f32_u16(buf, meta->target_y, 14));
 	CHECK(vmeta_write_f64_i32(buf, target.latitude, 22));
 	CHECK(vmeta_write_f64_i32(buf, target.longitude, 22));
-	CHECK(vmeta_write_f64_i32(buf, target.altitude, 16));
+	CHECK(vmeta_write_f64_i32(buf, target.altitude_egm96amsl, 16));
 	CHECK(vmeta_write_f64_u32(buf, meta->estimated_precision, 16));
 	CHECK(vmeta_write_f64_u32(buf, meta->grid_precision, 16));
 
@@ -1254,11 +1259,12 @@ int vmeta_frame_ext_lfic_read(struct vmeta_buffer *buf,
 	CHECK(vmeta_read_f32_u16(buf, &meta->target_y, 14));
 	CHECK(vmeta_read_f64_i32(buf, &target.latitude, 22));
 	CHECK(vmeta_read_f64_i32(buf, &target.longitude, 22));
-	CHECK(vmeta_read_f64_i32(buf, &target.altitude, 16));
+	CHECK(vmeta_read_f64_i32(buf, &target.altitude_egm96amsl, 16));
 	CHECK(vmeta_read_f64_u32(buf, &meta->estimated_precision, 16));
 	CHECK(vmeta_read_f64_u32(buf, &meta->grid_precision, 16));
 
 	/* Adjust target if needed */
+	target.altitude_wgs84ellipsoid = NAN;
 	vmeta_location_adjust_read(&target, &meta->target_location);
 	meta->target_location.sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
 
@@ -1339,7 +1345,18 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 			loc = vmeta_frame_proto_get_drone_location(drone);
 			if (loc == NULL)
 				goto out;
-			loc->altitude = base->location.altitude;
+			loc->altitude_wgs84ellipsoid =
+				base->location.altitude_wgs84ellipsoid;
+			if (isnan(loc->altitude_wgs84ellipsoid))
+				loc->altitude_wgs84ellipsoid = 0.;
+			else if (loc->altitude_wgs84ellipsoid == 0.)
+				loc->altitude_wgs84ellipsoid = DBL_MIN;
+			loc->altitude_egm96amsl =
+				base->location.altitude_egm96amsl;
+			if (isnan(loc->altitude_egm96amsl))
+				loc->altitude_egm96amsl = 0.;
+			else if (loc->altitude_egm96amsl == 0.)
+				loc->altitude_egm96amsl = DBL_MIN;
 			loc->latitude = base->location.latitude;
 			loc->longitude = base->location.longitude;
 			loc->horizontal_accuracy =
@@ -1421,7 +1438,19 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 				automation);
 			if (loc == NULL)
 				goto out;
-			loc->altitude = automationv3->framing_target.altitude;
+			loc->altitude_wgs84ellipsoid =
+				automationv3->framing_target
+					.altitude_wgs84ellipsoid;
+			if (isnan(loc->altitude_wgs84ellipsoid))
+				loc->altitude_wgs84ellipsoid = 0.;
+			else if (loc->altitude_wgs84ellipsoid == 0.)
+				loc->altitude_wgs84ellipsoid = DBL_MIN;
+			loc->altitude_egm96amsl =
+				automationv3->framing_target.altitude_egm96amsl;
+			if (isnan(loc->altitude_egm96amsl))
+				loc->altitude_egm96amsl = 0.;
+			else if (loc->altitude_egm96amsl == 0.)
+				loc->altitude_egm96amsl = DBL_MIN;
 			loc->latitude = automationv3->framing_target.latitude;
 			loc->longitude = automationv3->framing_target.longitude;
 			loc->horizontal_accuracy = automationv3->framing_target
@@ -1436,8 +1465,20 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 				automation);
 			if (loc == NULL)
 				goto out;
-			loc->altitude =
-				automationv3->flight_destination.altitude;
+			loc->altitude_wgs84ellipsoid =
+				automationv3->flight_destination
+					.altitude_wgs84ellipsoid;
+			if (isnan(loc->altitude_wgs84ellipsoid))
+				loc->altitude_wgs84ellipsoid = 0.;
+			else if (loc->altitude_wgs84ellipsoid == 0.)
+				loc->altitude_wgs84ellipsoid = DBL_MIN;
+			loc->altitude_egm96amsl =
+				automationv3->flight_destination
+					.altitude_egm96amsl;
+			if (isnan(loc->altitude_egm96amsl))
+				loc->altitude_egm96amsl = 0.;
+			else if (loc->altitude_egm96amsl == 0.)
+				loc->altitude_egm96amsl = DBL_MIN;
 			loc->latitude =
 				automationv3->flight_destination.latitude;
 			loc->longitude =
@@ -1518,7 +1559,18 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 			loc = vmeta_frame_proto_get_lfic_location(lfic);
 			if (loc == NULL)
 				goto out;
-			loc->altitude = lficv3->target_location.altitude;
+			loc->altitude_wgs84ellipsoid =
+				lficv3->target_location.altitude_wgs84ellipsoid;
+			if (isnan(loc->altitude_wgs84ellipsoid))
+				loc->altitude_wgs84ellipsoid = 0.;
+			else if (loc->altitude_wgs84ellipsoid == 0.)
+				loc->altitude_wgs84ellipsoid = DBL_MIN;
+			loc->altitude_egm96amsl =
+				lficv3->target_location.altitude_egm96amsl;
+			if (isnan(loc->altitude_egm96amsl))
+				loc->altitude_egm96amsl = 0.;
+			else if (loc->altitude_egm96amsl == 0.)
+				loc->altitude_egm96amsl = DBL_MIN;
 			loc->latitude = lficv3->target_location.latitude;
 			loc->longitude = lficv3->target_location.longitude;
 			loc->horizontal_accuracy = lficv3->estimated_precision;

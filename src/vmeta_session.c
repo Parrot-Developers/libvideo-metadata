@@ -25,7 +25,6 @@
  */
 
 #include "vmeta_priv.h"
-#include <futils/systimetools.h>
 
 
 #define COPY_VALUE(_dst, _src)                                                 \
@@ -90,7 +89,7 @@ ssize_t vmeta_session_location_write(char *str,
 			       VMETA_SESSION_LOCATION_FORMAT_CSV,
 			       loc->latitude,
 			       loc->longitude,
-			       loc->altitude);
+			       loc->altitude_egm96amsl);
 		break;
 	case VMETA_SESSION_LOCATION_ISO6709:
 		ret = snprintf(str,
@@ -98,7 +97,7 @@ ssize_t vmeta_session_location_write(char *str,
 			       VMETA_SESSION_LOCATION_FORMAT_ISO6709,
 			       loc->latitude,
 			       loc->longitude,
-			       loc->altitude);
+			       loc->altitude_egm96amsl);
 		break;
 	case VMETA_SESSION_LOCATION_XYZ:
 		ret = snprintf(str,
@@ -123,6 +122,8 @@ int vmeta_session_location_read(const char *str, struct vmeta_location *loc)
 	memset(loc, 0, sizeof(*loc));
 	loc->latitude = 500.;
 	loc->longitude = 500.;
+	loc->altitude_wgs84ellipsoid = NAN;
+	loc->altitude_egm96amsl = NAN;
 	loc->sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
 
 	if (strchr(str, ',')) {
@@ -131,7 +132,7 @@ int vmeta_session_location_read(const char *str, struct vmeta_location *loc)
 			     "%lf,%lf,%lf",
 			     &loc->latitude,
 			     &loc->longitude,
-			     &loc->altitude);
+			     &loc->altitude_egm96amsl);
 		if (ret == 3)
 			loc->valid = 1;
 	} else {
@@ -147,7 +148,7 @@ int vmeta_session_location_read(const char *str, struct vmeta_location *loc)
 		}
 		if (p2) {
 			p1 = p2;
-			loc->altitude = strtod(p1, &p2);
+			loc->altitude_egm96amsl = strtod(p1, &p2);
 		}
 	}
 
@@ -190,6 +191,140 @@ int vmeta_session_fov_read(const char *str, struct vmeta_fov *fov)
 		fov->has_horz = 1;
 		fov->has_vert = 1;
 	}
+
+	return 0;
+}
+
+
+ssize_t vmeta_session_perspective_distortion_write(char *str,
+						   size_t len,
+						   float r1,
+						   float r2,
+						   float r3,
+						   float t1,
+						   float t2)
+{
+	size_t ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+
+	ret = snprintf(str,
+		       len,
+		       VMETA_SESSION_PERSPECTIVE_DISTORTION_FORMAT,
+		       r1,
+		       r2,
+		       r3,
+		       t1,
+		       t2);
+
+	return (ssize_t)ret;
+}
+
+
+int vmeta_session_perspective_distortion_read(const char *str,
+					      float *r1,
+					      float *r2,
+					      float *r3,
+					      float *t1,
+					      float *t2)
+{
+	int ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(r1 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(r2 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(r3 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(t1 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(t2 == NULL, EINVAL);
+
+	ret = sscanf(str, "%f,%f,%f,%f,%f", r1, r2, r3, t1, t2);
+
+	if (ret != 5)
+		return -EPROTO;
+
+	return 0;
+}
+
+
+ssize_t vmeta_session_fisheye_affine_matrix_write(char *str,
+						  size_t len,
+						  float c,
+						  float d,
+						  float e,
+						  float f)
+{
+	size_t ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+
+	ret = snprintf(str,
+		       len,
+		       VMETA_SESSION_FISHEYE_AFFINE_MATRIX_FORMAT,
+		       c,
+		       d,
+		       e,
+		       f);
+
+	return (ssize_t)ret;
+}
+
+
+int vmeta_session_fisheye_affine_matrix_read(const char *str,
+					     float *c,
+					     float *d,
+					     float *e,
+					     float *f)
+{
+	int ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(c == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(d == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(e == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(f == NULL, EINVAL);
+
+	ret = sscanf(str, "%f,%f,%f,%f", c, d, e, f);
+
+	if (ret != 4)
+		return -EPROTO;
+
+	return 0;
+}
+
+
+ssize_t vmeta_session_fisheye_polynomial_write(char *str,
+					       size_t len,
+					       float p2,
+					       float p3,
+					       float p4)
+{
+	size_t ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+
+	ret = snprintf(
+		str, len, VMETA_SESSION_FISHEYE_POLYNOMIAL_FORMAT, p2, p3, p4);
+
+	return (ssize_t)ret;
+}
+
+
+int vmeta_session_fisheye_polynomial_read(const char *str,
+					  float *p2,
+					  float *p3,
+					  float *p4)
+{
+	int ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(p2 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(p3 == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(p4 == NULL, EINVAL);
+
+	ret = sscanf(str, "0,1,%f,%f,%f", p2, p3, p4);
+
+	if (ret != 4)
+		return -EPROTO;
 
 	return 0;
 }
@@ -508,6 +643,71 @@ int vmeta_session_streaming_sdes_write(
 		      userdata);
 	}
 
+	if (meta->camera_serial_number[0] != '\0') {
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      meta->camera_serial_number,
+		      VMETA_STRM_SDES_KEY_CAMERA_SERIAL_NUMBER,
+		      userdata);
+	}
+
+	switch (meta->camera_model.type) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE: {
+		char dist[VMETA_SESSION_PERSPECTIVE_DISTORTION_MAX_LEN];
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      vmeta_camera_model_type_to_str(meta->camera_model.type),
+		      VMETA_STRM_SDES_KEY_CAMERA_MODEL_TYPE,
+		      userdata);
+		ssize_t ret = vmeta_session_perspective_distortion_write(
+			dist,
+			sizeof(dist),
+			meta->camera_model.perspective.distortion.r1,
+			meta->camera_model.perspective.distortion.r2,
+			meta->camera_model.perspective.distortion.r3,
+			meta->camera_model.perspective.distortion.t1,
+			meta->camera_model.perspective.distortion.t2);
+		if (ret > 0)
+			(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+			      dist,
+			      VMETA_STRM_SDES_KEY_PERSPECTIVE_DISTORTION,
+			      userdata);
+		break;
+	}
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE: {
+		char matrix[VMETA_SESSION_FISHEYE_AFFINE_MATRIX_MAX_LEN];
+		char coef[VMETA_SESSION_FISHEYE_POLYNOMIAL_MAX_LEN];
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      vmeta_camera_model_type_to_str(meta->camera_model.type),
+		      VMETA_STRM_SDES_KEY_CAMERA_MODEL_TYPE,
+		      userdata);
+		ssize_t ret = vmeta_session_fisheye_affine_matrix_write(
+			matrix,
+			sizeof(matrix),
+			meta->camera_model.fisheye.affine_matrix.c,
+			meta->camera_model.fisheye.affine_matrix.d,
+			meta->camera_model.fisheye.affine_matrix.e,
+			meta->camera_model.fisheye.affine_matrix.f);
+		if (ret > 0)
+			(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+			      matrix,
+			      VMETA_STRM_SDES_KEY_FISHEYE_AFFINE_MATRIX,
+			      userdata);
+		ret = vmeta_session_fisheye_polynomial_write(
+			coef,
+			sizeof(coef),
+			meta->camera_model.fisheye.polynomial.p2,
+			meta->camera_model.fisheye.polynomial.p3,
+			meta->camera_model.fisheye.polynomial.p4);
+		if (ret > 0)
+			(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+			      coef,
+			      VMETA_STRM_SDES_KEY_FISHEYE_POLYNOMIAL,
+			      userdata);
+		break;
+	}
+	default:
+		break;
+	}
+
 	if (meta->video_mode != VMETA_VIDEO_MODE_UNKNOWN) {
 		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
 		      vmeta_video_mode_to_str(meta->video_mode),
@@ -744,6 +944,46 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_CAMERA_TYPE) ==
 			   0) {
 			meta->camera_type = vmeta_camera_type_from_str(value);
+
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_CAMERA_SERIAL_NUMBER) ==
+			   0) {
+			COPY_VALUE(meta->camera_serial_number, value);
+
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_CAMERA_MODEL_TYPE) == 0) {
+			meta->camera_model.type =
+				vmeta_camera_model_type_from_str(value);
+
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_PERSPECTIVE_DISTORTION) ==
+			   0) {
+			ret = vmeta_session_perspective_distortion_read(
+				value,
+				&meta->camera_model.perspective.distortion.r1,
+				&meta->camera_model.perspective.distortion.r2,
+				&meta->camera_model.perspective.distortion.r3,
+				&meta->camera_model.perspective.distortion.t1,
+				&meta->camera_model.perspective.distortion.t2);
+
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_FISHEYE_AFFINE_MATRIX) ==
+			   0) {
+			ret = vmeta_session_fisheye_affine_matrix_read(
+				value,
+				&meta->camera_model.fisheye.affine_matrix.c,
+				&meta->camera_model.fisheye.affine_matrix.d,
+				&meta->camera_model.fisheye.affine_matrix.e,
+				&meta->camera_model.fisheye.affine_matrix.f);
+
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_FISHEYE_POLYNOMIAL) ==
+			   0) {
+			ret = vmeta_session_fisheye_polynomial_read(
+				value,
+				&meta->camera_model.fisheye.polynomial.p2,
+				&meta->camera_model.fisheye.polynomial.p3,
+				&meta->camera_model.fisheye.polynomial.p4);
 
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_VIDEO_MODE) ==
 			   0) {
@@ -1004,6 +1244,71 @@ int vmeta_session_streaming_sdp_write(const struct vmeta_session *meta,
 		      userdata);
 	}
 
+	if (meta->camera_serial_number[0] != '\0') {
+		(*cb)(type,
+		      meta->camera_serial_number,
+		      VMETA_STRM_SDP_KEY_CAMERA_SERIAL_NUMBER,
+		      userdata);
+	}
+
+	switch (meta->camera_model.type) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE: {
+		char dist[VMETA_SESSION_PERSPECTIVE_DISTORTION_MAX_LEN];
+		(*cb)(type,
+		      vmeta_camera_model_type_to_str(meta->camera_model.type),
+		      VMETA_STRM_SDP_KEY_CAMERA_MODEL_TYPE,
+		      userdata);
+		ssize_t ret = vmeta_session_perspective_distortion_write(
+			dist,
+			sizeof(dist),
+			meta->camera_model.perspective.distortion.r1,
+			meta->camera_model.perspective.distortion.r2,
+			meta->camera_model.perspective.distortion.r3,
+			meta->camera_model.perspective.distortion.t1,
+			meta->camera_model.perspective.distortion.t2);
+		if (ret > 0)
+			(*cb)(type,
+			      dist,
+			      VMETA_STRM_SDP_KEY_PERSPECTIVE_DISTORTION,
+			      userdata);
+		break;
+	}
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE: {
+		char matrix[VMETA_SESSION_FISHEYE_AFFINE_MATRIX_MAX_LEN];
+		char coef[VMETA_SESSION_FISHEYE_POLYNOMIAL_MAX_LEN];
+		(*cb)(type,
+		      vmeta_camera_model_type_to_str(meta->camera_model.type),
+		      VMETA_STRM_SDP_KEY_CAMERA_MODEL_TYPE,
+		      userdata);
+		ssize_t ret = vmeta_session_fisheye_affine_matrix_write(
+			matrix,
+			sizeof(matrix),
+			meta->camera_model.fisheye.affine_matrix.c,
+			meta->camera_model.fisheye.affine_matrix.d,
+			meta->camera_model.fisheye.affine_matrix.e,
+			meta->camera_model.fisheye.affine_matrix.f);
+		if (ret > 0)
+			(*cb)(type,
+			      matrix,
+			      VMETA_STRM_SDP_KEY_FISHEYE_AFFINE_MATRIX,
+			      userdata);
+		ret = vmeta_session_fisheye_polynomial_write(
+			coef,
+			sizeof(coef),
+			meta->camera_model.fisheye.polynomial.p2,
+			meta->camera_model.fisheye.polynomial.p3,
+			meta->camera_model.fisheye.polynomial.p4);
+		if (ret > 0)
+			(*cb)(type,
+			      coef,
+			      VMETA_STRM_SDP_KEY_FISHEYE_POLYNOMIAL,
+			      userdata);
+		break;
+	}
+	default:
+		break;
+	}
+
 	if (meta->dynamic_range != VMETA_DYNAMIC_RANGE_UNKNOWN) {
 		(*cb)(type,
 		      vmeta_dynamic_range_to_str(meta->dynamic_range),
@@ -1197,6 +1502,45 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_CAMERA_TYPE) == 0) {
 			meta->camera_type = vmeta_camera_type_from_str(value);
+
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_CAMERA_MODEL_TYPE) ==
+			   0) {
+			meta->camera_model.type =
+				vmeta_camera_model_type_from_str(value);
+
+		} else if (strcmp(key,
+				  VMETA_STRM_SDP_KEY_PERSPECTIVE_DISTORTION) ==
+			   0) {
+			ret = vmeta_session_perspective_distortion_read(
+				value,
+				&meta->camera_model.perspective.distortion.r1,
+				&meta->camera_model.perspective.distortion.r2,
+				&meta->camera_model.perspective.distortion.r3,
+				&meta->camera_model.perspective.distortion.t1,
+				&meta->camera_model.perspective.distortion.t2);
+
+		} else if (strcmp(key,
+				  VMETA_STRM_SDP_KEY_FISHEYE_AFFINE_MATRIX) ==
+			   0) {
+			ret = vmeta_session_fisheye_affine_matrix_read(
+				value,
+				&meta->camera_model.fisheye.affine_matrix.c,
+				&meta->camera_model.fisheye.affine_matrix.d,
+				&meta->camera_model.fisheye.affine_matrix.e,
+				&meta->camera_model.fisheye.affine_matrix.f);
+
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_FISHEYE_POLYNOMIAL) ==
+			   0) {
+			ret = vmeta_session_fisheye_polynomial_read(
+				value,
+				&meta->camera_model.fisheye.polynomial.p2,
+				&meta->camera_model.fisheye.polynomial.p3,
+				&meta->camera_model.fisheye.polynomial.p4);
+
+		} else if (strcmp(key,
+				  VMETA_STRM_SDP_KEY_CAMERA_SERIAL_NUMBER) ==
+			   0) {
+			COPY_VALUE(meta->camera_serial_number, value);
 
 		} else if (strcmp(key,
 				  VMETA_STRM_SDP_KEY_THERMAL_METAVERSION) ==
@@ -1486,6 +1830,71 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 		      VMETA_REC_META_KEY_CAMERA_TYPE,
 		      vmeta_camera_type_to_str(meta->camera_type),
 		      userdata);
+	}
+
+	if (meta->camera_serial_number[0] != '\0') {
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_CAMERA_SERIAL_NUMBER,
+		      meta->camera_serial_number,
+		      userdata);
+	}
+
+	switch (meta->camera_model.type) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE: {
+		char dist[VMETA_SESSION_PERSPECTIVE_DISTORTION_MAX_LEN];
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_CAMERA_MODEL_TYPE,
+		      vmeta_camera_model_type_to_str(meta->camera_model.type),
+		      userdata);
+		ssize_t ret = vmeta_session_perspective_distortion_write(
+			dist,
+			sizeof(dist),
+			meta->camera_model.perspective.distortion.r1,
+			meta->camera_model.perspective.distortion.r2,
+			meta->camera_model.perspective.distortion.r3,
+			meta->camera_model.perspective.distortion.t1,
+			meta->camera_model.perspective.distortion.t2);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_PERSPECTIVE_DISTORTION,
+			      dist,
+			      userdata);
+		break;
+	}
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE: {
+		char matrix[VMETA_SESSION_FISHEYE_AFFINE_MATRIX_MAX_LEN];
+		char coef[VMETA_SESSION_FISHEYE_POLYNOMIAL_MAX_LEN];
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_CAMERA_MODEL_TYPE,
+		      vmeta_camera_model_type_to_str(meta->camera_model.type),
+		      userdata);
+		ssize_t ret = vmeta_session_fisheye_affine_matrix_write(
+			matrix,
+			sizeof(matrix),
+			meta->camera_model.fisheye.affine_matrix.c,
+			meta->camera_model.fisheye.affine_matrix.d,
+			meta->camera_model.fisheye.affine_matrix.e,
+			meta->camera_model.fisheye.affine_matrix.f);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_FISHEYE_AFFINE_MATRIX,
+			      matrix,
+			      userdata);
+		ret = vmeta_session_fisheye_polynomial_write(
+			coef,
+			sizeof(coef),
+			meta->camera_model.fisheye.polynomial.p2,
+			meta->camera_model.fisheye.polynomial.p3,
+			meta->camera_model.fisheye.polynomial.p4);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_FISHEYE_POLYNOMIAL,
+			      coef,
+			      userdata);
+		break;
+	}
+	default:
+		break;
 	}
 
 	if (meta->video_mode != VMETA_VIDEO_MODE_UNKNOWN) {
@@ -1846,6 +2255,38 @@ int vmeta_session_recording_read(const char *key,
 	} else if (strcmp(key, VMETA_REC_META_KEY_CAMERA_TYPE) == 0) {
 		meta->camera_type = vmeta_camera_type_from_str(value);
 
+	} else if (strcmp(key, VMETA_REC_META_KEY_CAMERA_SERIAL_NUMBER) == 0) {
+		COPY_VALUE(meta->camera_serial_number, value);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_CAMERA_MODEL_TYPE) == 0) {
+		meta->camera_model.type =
+			vmeta_camera_model_type_from_str(value);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_PERSPECTIVE_DISTORTION) ==
+		   0) {
+		ret = vmeta_session_perspective_distortion_read(
+			value,
+			&meta->camera_model.perspective.distortion.r1,
+			&meta->camera_model.perspective.distortion.r2,
+			&meta->camera_model.perspective.distortion.r3,
+			&meta->camera_model.perspective.distortion.t1,
+			&meta->camera_model.perspective.distortion.t2);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_FISHEYE_AFFINE_MATRIX) == 0) {
+		ret = vmeta_session_fisheye_affine_matrix_read(
+			value,
+			&meta->camera_model.fisheye.affine_matrix.c,
+			&meta->camera_model.fisheye.affine_matrix.d,
+			&meta->camera_model.fisheye.affine_matrix.e,
+			&meta->camera_model.fisheye.affine_matrix.f);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_FISHEYE_POLYNOMIAL) == 0) {
+		ret = vmeta_session_fisheye_polynomial_read(
+			value,
+			&meta->camera_model.fisheye.polynomial.p2,
+			&meta->camera_model.fisheye.polynomial.p3,
+			&meta->camera_model.fisheye.polynomial.p4);
+
 	} else if (strcmp(key, VMETA_REC_META_KEY_VIDEO_MODE) == 0) {
 		meta->video_mode = vmeta_video_mode_from_str(value);
 
@@ -1969,6 +2410,79 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 		vmeta_json_add_str(jobj,
 				   "camera_type",
 				   vmeta_camera_type_to_str(meta->camera_type));
+	}
+
+	if (meta->camera_serial_number[0] != '\0') {
+		vmeta_json_add_str(jobj,
+				   "camera_serial_number",
+				   meta->camera_serial_number);
+	}
+
+	switch (meta->camera_model.type) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE: {
+		struct json_object *jobj_model = json_object_new_object();
+		struct json_object *jpd = json_object_new_object();
+		vmeta_json_add_str(jobj_model,
+				   "type",
+				   vmeta_camera_model_type_to_str(
+					   meta->camera_model.type));
+		vmeta_json_add_double(
+			jpd,
+			"r1",
+			meta->camera_model.perspective.distortion.r1);
+		vmeta_json_add_double(
+			jpd,
+			"r2",
+			meta->camera_model.perspective.distortion.r2);
+		vmeta_json_add_double(
+			jpd,
+			"r3",
+			meta->camera_model.perspective.distortion.r3);
+		vmeta_json_add_double(
+			jpd,
+			"t1",
+			meta->camera_model.perspective.distortion.t1);
+		vmeta_json_add_double(
+			jpd,
+			"t2",
+			meta->camera_model.perspective.distortion.t2);
+		json_object_object_add(
+			jobj_model, "perspective_distortion", jpd);
+		json_object_object_add(jobj, "camera_model", jobj_model);
+		break;
+	}
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE: {
+		struct json_object *jobj_model = json_object_new_object();
+		struct json_object *jfam = json_object_new_object();
+		struct json_object *jfp = json_object_new_object();
+		vmeta_json_add_str(jobj_model,
+				   "type",
+				   vmeta_camera_model_type_to_str(
+					   meta->camera_model.type));
+		vmeta_json_add_double(
+			jfam, "c", meta->camera_model.fisheye.affine_matrix.c);
+		vmeta_json_add_double(
+			jfam, "d", meta->camera_model.fisheye.affine_matrix.d);
+		vmeta_json_add_double(
+			jfam, "e", meta->camera_model.fisheye.affine_matrix.e);
+		vmeta_json_add_double(
+			jfam, "f", meta->camera_model.fisheye.affine_matrix.f);
+		json_object_object_add(
+			jobj_model, "fisheye_affine_matrix", jfam);
+		vmeta_json_add_double(jfp, "p0", 0.);
+		vmeta_json_add_double(jfp, "p1", 1.);
+		vmeta_json_add_double(
+			jfp, "p2", meta->camera_model.fisheye.polynomial.p2);
+		vmeta_json_add_double(
+			jfp, "p3", meta->camera_model.fisheye.polynomial.p3);
+		vmeta_json_add_double(
+			jfp, "p4", meta->camera_model.fisheye.polynomial.p4);
+		json_object_object_add(jobj_model, "fisheye_polynomial", jfp);
+		json_object_object_add(jobj, "camera_model", jobj_model);
+		break;
+	}
+	default:
+		break;
 	}
 
 	if (meta->video_mode != VMETA_VIDEO_MODE_UNKNOWN)
@@ -2255,6 +2769,85 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 				maxlen - len,
 				"camera_type: %s\n",
 				vmeta_camera_type_to_str(meta->camera_type));
+	}
+
+	if (meta->camera_serial_number[0] != '\0') {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"camera_serial_number: %s\n",
+				meta->camera_serial_number);
+	}
+
+	switch (meta->camera_model.type) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE: {
+		char dist[VMETA_SESSION_PERSPECTIVE_DISTORTION_MAX_LEN];
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"camera_model_type: %s\n",
+				vmeta_camera_model_type_to_str(
+					meta->camera_model.type));
+		ssize_t ret = vmeta_session_perspective_distortion_write(
+			dist,
+			sizeof(dist),
+			meta->camera_model.perspective.distortion.r1,
+			meta->camera_model.perspective.distortion.r2,
+			meta->camera_model.perspective.distortion.r3,
+			meta->camera_model.perspective.distortion.t1,
+			meta->camera_model.perspective.distortion.t2);
+		if (ret > 0) {
+			VMETA_STR_PRINT(str + len,
+					len,
+					maxlen - len,
+					"camera_model_"
+					"perspective_distortion: %s\n",
+					dist);
+		}
+		break;
+	}
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE: {
+		char matrix[VMETA_SESSION_FISHEYE_AFFINE_MATRIX_MAX_LEN];
+		char coef[VMETA_SESSION_FISHEYE_POLYNOMIAL_MAX_LEN];
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"camera_model_type: %s\n",
+				vmeta_camera_model_type_to_str(
+					meta->camera_model.type));
+		ssize_t ret = vmeta_session_fisheye_affine_matrix_write(
+			matrix,
+			sizeof(matrix),
+			meta->camera_model.fisheye.affine_matrix.c,
+			meta->camera_model.fisheye.affine_matrix.d,
+			meta->camera_model.fisheye.affine_matrix.e,
+			meta->camera_model.fisheye.affine_matrix.f);
+		if (ret > 0) {
+			VMETA_STR_PRINT(str + len,
+					len,
+					maxlen - len,
+					"camera_model_"
+					"fisheye_affine_matrix: %s\n",
+					matrix);
+		}
+		ret = vmeta_session_fisheye_polynomial_write(
+			coef,
+			sizeof(coef),
+			meta->camera_model.fisheye.polynomial.p2,
+			meta->camera_model.fisheye.polynomial.p3,
+			meta->camera_model.fisheye.polynomial.p4);
+		if (ret > 0) {
+			VMETA_STR_PRINT(str + len,
+					len,
+					maxlen - len,
+					"camera_model_"
+					"fisheye_polynomial: %s\n",
+					coef);
+		}
+		break;
+	}
+	default:
+		break;
 	}
 
 	if (meta->video_mode != VMETA_VIDEO_MODE_UNKNOWN) {

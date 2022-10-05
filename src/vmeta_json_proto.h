@@ -79,6 +79,11 @@ void vmeta_json_proto_add_ned(struct json_object *jobj,
 			      const Vmeta__NED *ned);
 
 
+void vmeta_json_proto_add_vec2(struct json_object *jobj,
+			       const char *name,
+			       const Vmeta__Vector2 *vec2);
+
+
 void vmeta_json_proto_add_vec3(struct json_object *jobj,
 			       const char *name,
 			       const Vmeta__Vector3 *vec3);

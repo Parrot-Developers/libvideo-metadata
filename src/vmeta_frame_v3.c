@@ -54,7 +54,7 @@ int vmeta_frame_v3_write(struct vmeta_buffer *buf,
 	vmeta_location_adjust_write(&base->location, &location);
 
 	/* Pack some fields manually */
-	gpsAltitude = (int32_t)(location.altitude * (1 << 8));
+	gpsAltitude = (int32_t)(location.altitude_egm96amsl * (1 << 8));
 	gpsAltitudeAndSvCount = ((gpsAltitude << 8) & 0xffffff00) |
 				(base->location.sv_count & 0xff);
 	link_quality = ((base->link_goodput << 8) & 0xffffff00) |
@@ -211,7 +211,8 @@ int vmeta_frame_v3_read(struct vmeta_buffer *buf, struct vmeta_frame_v3 *meta)
 
 	/* Unpack some fields manually */
 	gpsAltitude = (gpsAltitudeAndSvCount & 0xffffff00) >> 8;
-	location.altitude = (double)gpsAltitude / (1 << 8);
+	location.altitude_wgs84ellipsoid = NAN;
+	location.altitude_egm96amsl = (double)gpsAltitude / (1 << 8);
 	location.sv_count = gpsAltitudeAndSvCount & 0xff;
 	base->link_goodput = (link_quality & 0xffffff00) >> 8;
 	base->link_quality = link_quality & 0xff;
@@ -547,12 +548,12 @@ size_t vmeta_frame_v3_csv_header(char *str, size_t maxlen)
 		maxlen - len,
 		"drone_quat_w drone_quat_x drone_quat_y drone_quat_z "
 		"location_valid location_latitude location_longitude "
-		"location_altitude location_horizontal_accuracy "
-		"location_vertical_accuracy location_sv_count "
-		"ground_distance speed_north speed_east speed_down air_speed "
-		"frame_base_quat_w frame_base_quat_x frame_base_quat_y "
-		"frame_base_quat_z frame_quat_w frame_quat_x frame_quat_y "
-		"frame_quat_z exposure_time gain "
+		"location_altitude_wgs84ellipsoid location_altitude_egm96amsl "
+		"location_horizontal_accuracy location_vertical_accuracy "
+		"location_sv_count ground_distance speed_north speed_east "
+		"speed_down air_speed frame_base_quat_w frame_base_quat_x "
+		"frame_base_quat_y frame_base_quat_z frame_quat_w frame_quat_x "
+		"frame_quat_y frame_quat_z exposure_time gain "
 		"awb_r_gain awb_b_gain picture_hfov picture_vfov "
 		"link_goodput link_quality wifi_rssi battery_percentage "
 		"animation state mode "
@@ -560,12 +561,14 @@ size_t vmeta_frame_v3_csv_header(char *str, size_t maxlen)
 		"automation_framing_target_valid "
 		"automation_framing_target_latitude "
 		"automation_framing_target_longitude "
-		"automation_framing_target_altitude "
+		"automation_framing_target_altitude_wgs84ellipsoid "
+		"automation_framing_target_altitude_egm96amsl "
 		"automation_framing_target_sv_count "
 		"automation_flight_destination_valid "
 		"automation_flight_destination_latitude "
 		"automation_flight_destination_longitude "
-		"automation_flight_destination_altitude "
+		"automation_flight_destination_altitude_wgs84ellipsoid "
+		"automation_flight_destination_altitude_egm96amsl "
 		"automation_flight_destination_sv_count "
 		"automation_followme_enabled automation_lookatme_enabled "
 		"automation_angle_locked automation_animation "
@@ -578,7 +581,9 @@ size_t vmeta_frame_v3_csv_header(char *str, size_t maxlen)
 		"thermal_probe_x thermal_probe_y thermal_probe_temp "
 		"lfic_target_x lfic_target_y lfic_target_location_valid "
 		"lfic_target_location_latitude lfic_target_location_longitude "
-		"lfic_target_location_altitude lfic_target_location_sv_count "
+		"lfic_target_location_altitude_wgs84ellipsoid "
+		"lfic_target_location_altitude_egm96amsl "
+		"lfic_target_location_sv_count "
 		"lfic_estimated_precision lfic_grid_precision");
 
 	return len;

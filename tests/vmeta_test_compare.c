@@ -107,12 +107,44 @@ void compare_vmeta_location(struct vmeta_location *l1,
 
 	/* Altitude granularity is 8 if sv_count is included, 16 otherwise */
 	if (include_sv_count) {
-		CU_ASSERT_DOUBLE_EQUAL(
-			l1->altitude, l2->altitude, granularity(8));
+		if (!isnan(l1->altitude_wgs84ellipsoid) &&
+		    !isnan(l2->altitude_wgs84ellipsoid)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_wgs84ellipsoid,
+					       l2->altitude_wgs84ellipsoid,
+					       granularity(8));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_wgs84ellipsoid) &&
+				  isnan(l2->altitude_wgs84ellipsoid));
+		}
+		if (!isnan(l1->altitude_egm96amsl) &&
+		    !isnan(l2->altitude_egm96amsl)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_egm96amsl,
+					       l2->altitude_egm96amsl,
+					       granularity(8));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_egm96amsl) &&
+				  isnan(l2->altitude_egm96amsl));
+		}
 		CU_ASSERT_EQUAL(l1->sv_count, l2->sv_count);
 	} else {
-		CU_ASSERT_DOUBLE_EQUAL(
-			l1->altitude, l2->altitude, granularity(16));
+		if (!isnan(l1->altitude_wgs84ellipsoid) &&
+		    !isnan(l2->altitude_wgs84ellipsoid)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_wgs84ellipsoid,
+					       l2->altitude_wgs84ellipsoid,
+					       granularity(16));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_wgs84ellipsoid) &&
+				  isnan(l2->altitude_wgs84ellipsoid));
+		}
+		if (!isnan(l1->altitude_egm96amsl) &&
+		    !isnan(l2->altitude_egm96amsl)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_egm96amsl,
+					       l2->altitude_egm96amsl,
+					       granularity(16));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_egm96amsl) &&
+				  isnan(l2->altitude_egm96amsl));
+		}
 	}
 }
 
@@ -123,7 +155,9 @@ void compare_proto_location(Vmeta__Location *l1, Vmeta__Location *l2)
 	if (!l1 || !l2)
 		return;
 
-	CU_ASSERT_EQUAL(l1->altitude, l2->altitude);
+	CU_ASSERT_EQUAL(l1->altitude_wgs84ellipsoid,
+			l2->altitude_wgs84ellipsoid);
+	CU_ASSERT_EQUAL(l1->altitude_egm96amsl, l2->altitude_egm96amsl);
 	CU_ASSERT_EQUAL(l1->latitude, l2->latitude);
 	CU_ASSERT_EQUAL(l1->longitude, l2->longitude);
 	CU_ASSERT_EQUAL(l1->sv_count, l2->sv_count);
@@ -152,12 +186,44 @@ void compare_vmeta_proto_location(struct vmeta_location *l1,
 
 	/* Altitude granularity is 8 if sv_count is included, 16 otherwise */
 	if (include_sv_count) {
-		CU_ASSERT_DOUBLE_EQUAL(
-			l1->altitude, l2->altitude, granularity(8));
+		if (!isnan(l1->altitude_wgs84ellipsoid) &&
+		    (l2->altitude_wgs84ellipsoid != 0.)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_wgs84ellipsoid,
+					       l2->altitude_wgs84ellipsoid,
+					       granularity(8));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_wgs84ellipsoid) &&
+				  (l2->altitude_wgs84ellipsoid == 0.));
+		}
+		if (!isnan(l1->altitude_egm96amsl) &&
+		    (l2->altitude_egm96amsl != 0.)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_egm96amsl,
+					       l2->altitude_egm96amsl,
+					       granularity(8));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_egm96amsl) &&
+				  (l2->altitude_egm96amsl == 0.));
+		}
 		CU_ASSERT_EQUAL(l1->sv_count, l2->sv_count);
 	} else {
-		CU_ASSERT_DOUBLE_EQUAL(
-			l1->altitude, l2->altitude, granularity(16));
+		if (!isnan(l1->altitude_wgs84ellipsoid) &&
+		    (l2->altitude_wgs84ellipsoid != 0.)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_wgs84ellipsoid,
+					       l2->altitude_wgs84ellipsoid,
+					       granularity(16));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_wgs84ellipsoid) &&
+				  (l2->altitude_wgs84ellipsoid == 0.));
+		}
+		if (!isnan(l1->altitude_egm96amsl) &&
+		    (l2->altitude_egm96amsl != 0.)) {
+			CU_ASSERT_DOUBLE_EQUAL(l1->altitude_egm96amsl,
+					       l2->altitude_egm96amsl,
+					       granularity(16));
+		} else {
+			CU_ASSERT(isnan(l1->altitude_egm96amsl) &&
+				  (l2->altitude_egm96amsl == 0.));
+		}
 	}
 }
 
@@ -186,6 +252,7 @@ void compare_proto_ned(Vmeta__NED *n1, Vmeta__NED *n2)
 	CU_ASSERT_EQUAL(n1->down, n2->down);
 }
 
+
 void compare_vmeta_proto_ned(struct vmeta_ned *n1, Vmeta__NED *n2)
 {
 	CU_ASSERT_PTR_NOT_NULL(n1);
@@ -196,6 +263,41 @@ void compare_vmeta_proto_ned(struct vmeta_ned *n1, Vmeta__NED *n2)
 	CU_ASSERT_DOUBLE_EQUAL(n1->north, n2->north, granularity(8));
 	CU_ASSERT_DOUBLE_EQUAL(n1->east, n2->east, granularity(8));
 	CU_ASSERT_DOUBLE_EQUAL(n1->down, n2->down, granularity(8));
+}
+
+
+void compare_vmeta_xy(struct vmeta_xy *v1, struct vmeta_xy *v2)
+{
+	CU_ASSERT_PTR_NOT_NULL(v1);
+	CU_ASSERT_PTR_NOT_NULL(v2);
+	if (!v1 || !v2)
+		return;
+
+	CU_ASSERT_DOUBLE_EQUAL(v1->x, v2->x, granularity(8));
+	CU_ASSERT_DOUBLE_EQUAL(v1->y, v2->y, granularity(8));
+}
+
+
+void compare_proto_vector2(Vmeta__Vector2 *v1, Vmeta__Vector2 *v2)
+{
+	VMETA_ASSERT_BOTH_NULL_NOTNULL(v1, v2);
+	if (!v1 || !v2)
+		return;
+
+	CU_ASSERT_EQUAL(v1->x, v2->x);
+	CU_ASSERT_EQUAL(v1->y, v2->y);
+}
+
+
+void compare_vmeta_proto_xy(struct vmeta_xy *v1, Vmeta__Vector2 *v2)
+{
+	CU_ASSERT_PTR_NOT_NULL(v1);
+	CU_ASSERT_PTR_NOT_NULL(v2);
+	if (!v1 || !v2)
+		return;
+
+	CU_ASSERT_DOUBLE_EQUAL(v1->x, v2->x, granularity(8));
+	CU_ASSERT_DOUBLE_EQUAL(v1->y, v2->y, granularity(8));
 }
 
 
@@ -325,6 +427,7 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 {
 	int err1, err2;
 	struct vmeta_location loc1, loc2;
+	struct vmeta_xy vec1, vec2;
 	struct vmeta_ned ned1, ned2;
 	struct vmeta_euler eul1, eul2;
 	struct vmeta_quaternion q1, q2;
@@ -412,6 +515,18 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 	CU_ASSERT_EQUAL(err1, err2);
 	if (err1 == 0 && err2 == 0)
 		CU_ASSERT_EQUAL(u64_1, u64_2);
+
+	err1 = vmeta_frame_get_camera_location(f1, &loc1);
+	err2 = vmeta_frame_get_camera_location(f2, &loc2);
+	CU_ASSERT_EQUAL(err1, err2);
+	if (err1 == 0 && err2 == 0)
+		compare_vmeta_location(&loc1, &loc2, true);
+
+	err1 = vmeta_frame_get_camera_principal_point(f1, &vec1);
+	err2 = vmeta_frame_get_camera_principal_point(f2, &vec2);
+	CU_ASSERT_EQUAL(err1, err2);
+	if (err1 == 0 && err2 == 0)
+		compare_vmeta_xy(&vec1, &vec2);
 
 	err1 = vmeta_frame_get_camera_pan(f1, &fl1);
 	err2 = vmeta_frame_get_camera_pan(f2, &fl2);
@@ -692,6 +807,7 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 {
 	int err, expected;
 	struct vmeta_location loc;
+	struct vmeta_xy vec;
 	struct vmeta_ned ned;
 	struct vmeta_euler eul;
 	struct vmeta_quaternion q;
@@ -812,6 +928,20 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 	CU_ASSERT_EQUAL(err, expected);
 	if (err == 0)
 		CU_ASSERT_EQUAL(u64, proto->camera->timestamp);
+
+	err = vmeta_frame_get_camera_location(f, &loc);
+	expected = (proto->camera && proto->camera->location) ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		compare_vmeta_proto_location(
+			&loc, proto->camera->location, true);
+
+	err = vmeta_frame_get_camera_principal_point(f, &vec);
+	expected =
+		(proto->camera && proto->camera->principal_point) ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		compare_vmeta_proto_xy(&vec, proto->camera->principal_point);
 
 	err = vmeta_frame_get_camera_pan(f, &fl);
 	expected = -ENOENT;

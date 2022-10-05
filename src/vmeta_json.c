@@ -38,7 +38,16 @@ int vmeta_json_add_location(struct json_object *jobj,
 
 	vmeta_json_add_double(jobj_val, "latitude", val->latitude);
 	vmeta_json_add_double(jobj_val, "longitude", val->longitude);
-	vmeta_json_add_double(jobj_val, "altitude", val->altitude);
+	if (!isnan(val->altitude_wgs84ellipsoid)) {
+		vmeta_json_add_double(jobj_val,
+				      "altitude_wgs84ellipsoid",
+				      val->altitude_wgs84ellipsoid);
+	}
+	if (!isnan(val->altitude_egm96amsl)) {
+		vmeta_json_add_double(jobj_val,
+				      "altitude_egm96amsl",
+				      val->altitude_egm96amsl);
+	}
 	if (val->horizontal_accuracy != 0.) {
 		vmeta_json_add_double(jobj_val,
 				      "horizontal_accuracy",

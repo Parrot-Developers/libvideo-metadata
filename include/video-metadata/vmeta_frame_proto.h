@@ -197,13 +197,30 @@ VMETA_API Vmeta__Quaternion *
 vmeta_frame_proto_get_camera_quat(Vmeta__CameraMetadata *camera);
 
 /**
- * Get the Vect3 local position part of a CameraMetadata,
+ * Get the Vector3 local position part of a CameraMetadata,
  * creating it if required.
- * @param drone: the CameraMetadata
- * @return A pointer to the Vec3 local position, or NULL on error.
+ * @param camera: the CameraMetadata
+ * @return A pointer to the Vector3 local position, or NULL on error.
  */
 VMETA_API Vmeta__Vector3 *
 vmeta_frame_proto_get_camera_local_position(Vmeta__CameraMetadata *camera);
+
+/**
+ * Get the Location part of a CameraMetadata, creating it if required.
+ * @param camera: the CameraMetadata
+ * @return A pointer to the Location, or NULL on error.
+ */
+VMETA_API Vmeta__Location *
+vmeta_frame_proto_get_camera_location(Vmeta__CameraMetadata *camera);
+
+/**
+ * Get the Vector2 principal point part of a CameraMetadata,
+ * creating it if required.
+ * @param camera: the CameraMetadata
+ * @return A pointer to the Vector2 principal point, or NULL on error.
+ */
+VMETA_API Vmeta__Vector2 *
+vmeta_frame_proto_get_camera_principal_point(Vmeta__CameraMetadata *camera);
 
 
 /**
@@ -248,10 +265,10 @@ VMETA_API Vmeta__NED *
 vmeta_frame_proto_get_drone_position(Vmeta__DroneMetadata *drone);
 
 /**
- * Get the Vect3 local position part of a DroneMetadata,
+ * Get the Vector3 local position part of a DroneMetadata,
  * creating it if required.
  * @param drone: the DroneMetadata
- * @return A pointer to the Vec3 local position, or NULL on error.
+ * @return A pointer to the Vector3 local position, or NULL on error.
  */
 VMETA_API Vmeta__Vector3 *
 vmeta_frame_proto_get_drone_local_position(Vmeta__DroneMetadata *drone);

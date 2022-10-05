@@ -53,7 +53,7 @@ int vmeta_frame_v2_write(struct vmeta_buffer *buf,
 	vmeta_location_adjust_write(&base->location, &location);
 
 	/* Pack some fields manually */
-	gps_altitude = (int32_t)(location.altitude * (1 << 8));
+	gps_altitude = (int32_t)(location.altitude_egm96amsl * (1 << 8));
 	gps_altitude_and_sv_count = ((gps_altitude << 8) & 0xffffff00) |
 				    (base->location.sv_count & 0xff);
 	state = ((base->binning << 7) & 0x80) | (base->state & 0x7f);
@@ -190,7 +190,8 @@ int vmeta_frame_v2_read(struct vmeta_buffer *buf, struct vmeta_frame_v2 *meta)
 
 	/* Unpack some fields manually */
 	gps_altitude = (gps_altitude_and_sv_count & 0xffffff00) >> 8;
-	location.altitude = (double)gps_altitude / (1 << 8);
+	location.altitude_wgs84ellipsoid = NAN;
+	location.altitude_egm96amsl = (double)gps_altitude / (1 << 8);
 	location.sv_count = gps_altitude_and_sv_count & 0xff;
 	base->binning = (state & 0x80) >> 7;
 	base->state = state & 0x7f;
@@ -407,16 +408,18 @@ size_t vmeta_frame_v2_csv_header(char *str, size_t maxlen)
 		maxlen - len,
 		"drone_quat_w drone_quat_x drone_quat_y drone_quat_z "
 		"location_valid location_latitude location_longitude "
-		"location_altitude location_horizontal_accuracy "
-		"location_vertical_accuracy location_sv_count "
-		"ground_distance speed_north speed_east speed_down air_speed "
-		"frame_quat_w frame_quat_x frame_quat_y frame_quat_z "
-		"camera_pan camera_tilt exposure_time gain "
+		"location_altitude_wgs84ellipsoid location_altitude_egm96amsl "
+		"location_horizontal_accuracy location_vertical_accuracy "
+		"location_sv_count ground_distance speed_north speed_east "
+		"speed_down air_speed frame_quat_w frame_quat_x frame_quat_y "
+		"frame_quat_z camera_pan camera_tilt exposure_time gain "
 		"wifi_rssi battery_percentage "
 		"binning animation state mode "
 		"frame_timestamp "
 		"followme_target_valid followme_target_latitude "
-		"followme_target_longitude followme_target_altitude "
+		"followme_target_longitude "
+		"followme_target_altitude_wgs84ellipsoid "
+		"followme_target_altitude_egm96amsl "
 		"followme_target_sv_count "
 		"followme_enabled followme_mode "
 		"followme_angle_locked followme_animation");

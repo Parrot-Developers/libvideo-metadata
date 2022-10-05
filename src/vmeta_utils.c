@@ -114,6 +114,38 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 	}
 }
 
+void vmeta_quat_rotate_vector(const struct vmeta_quaternion *q,
+			      struct vmeta_xyz *vector)
+{
+	struct vmeta_xyz tmp;
+
+	if (!q || !vector)
+		return;
+
+	tmp.x = (1.f - 2.f * (q->y * q->y + q->z * q->z)) * vector->x +
+		(2.f * q->x * q->y - 2.f * q->w * q->z) * vector->y +
+		(2.f * q->w * q->y + 2.f * q->x * q->z) * vector->z;
+	tmp.y = (2.f * q->x * q->y + 2.f * q->w * q->z) * vector->x +
+		(1.f - 2.f * (q->x * q->x + q->z * q->z)) * vector->y +
+		(-2.f * q->w * q->x + 2.f * q->y * q->z) * vector->z;
+	tmp.z = (-2.f * q->w * q->y + 2.f * q->x * q->z) * vector->x +
+		(2.f * q->w * q->x + 2.f * q->y * q->z) * vector->y +
+		(1.f - 2.f * (q->x * q->x + q->y * q->y)) * vector->z;
+
+	vector->x = tmp.x;
+	vector->y = tmp.y;
+	vector->z = tmp.z;
+}
+
+void vmeta_quat_conjugate(struct vmeta_quaternion *q)
+{
+	if (!q)
+		return;
+
+	q->x = -q->x;
+	q->y = -q->y;
+	q->z = -q->z;
+}
 
 int vmeta_frame_get_location(struct vmeta_frame *meta,
 			     struct vmeta_location *loc)
@@ -155,7 +187,14 @@ int vmeta_frame_get_location(struct vmeta_frame *meta,
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		loc->altitude = tm->drone->location->altitude;
+		loc->altitude_wgs84ellipsoid =
+			tm->drone->location->altitude_wgs84ellipsoid;
+		if (loc->altitude_wgs84ellipsoid == 0.)
+			loc->altitude_wgs84ellipsoid = NAN;
+		loc->altitude_egm96amsl =
+			tm->drone->location->altitude_egm96amsl;
+		if (loc->altitude_egm96amsl == 0.)
+			loc->altitude_egm96amsl = NAN;
 		loc->latitude = tm->drone->location->latitude;
 		loc->longitude = tm->drone->location->longitude;
 		loc->horizontal_accuracy =
@@ -726,6 +765,108 @@ int vmeta_frame_get_frame_timestamp(struct vmeta_frame *meta,
 
 	if (res == 0 && *timestamp == 0)
 		res = -ENOENT;
+	return res;
+}
+
+
+int vmeta_frame_get_camera_location(struct vmeta_frame *meta,
+				    struct vmeta_location *loc)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
+	memset(loc, 0, sizeof(*loc));
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || !tm->camera->location) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		loc->altitude_wgs84ellipsoid =
+			tm->camera->location->altitude_wgs84ellipsoid;
+		if (loc->altitude_wgs84ellipsoid == 0.)
+			loc->altitude_wgs84ellipsoid = NAN;
+		loc->altitude_egm96amsl =
+			tm->camera->location->altitude_egm96amsl;
+		if (loc->altitude_egm96amsl == 0.)
+			loc->altitude_egm96amsl = NAN;
+		loc->latitude = tm->camera->location->latitude;
+		loc->longitude = tm->camera->location->longitude;
+		loc->horizontal_accuracy =
+			tm->camera->location->horizontal_accuracy;
+		loc->vertical_accuracy =
+			tm->camera->location->vertical_accuracy;
+		loc->sv_count = tm->camera->location->sv_count;
+		loc->valid = 1;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGW("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	if (res == 0 && loc->valid == 0)
+		res = -ENOENT;
+	return res;
+}
+
+
+int vmeta_frame_get_camera_principal_point(struct vmeta_frame *meta,
+					   struct vmeta_xy *vec)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(vec == NULL, EINVAL);
+	memset(vec, 0, sizeof(*vec));
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || !tm->camera->principal_point) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		vec->x = tm->camera->principal_point->x;
+		vec->y = tm->camera->principal_point->y;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGW("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
 	return res;
 }
 
@@ -1476,6 +1617,35 @@ const char *vmeta_camera_type_to_str(enum vmeta_camera_type val)
 }
 
 
+enum vmeta_camera_model_type vmeta_camera_model_type_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_CAMERA_MODEL_TYPE_UNKNOWN;
+
+	if (strcasecmp(str, "perspective") == 0) {
+		return VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE;
+	} else if (strcasecmp(str, "fisheye") == 0) {
+		return VMETA_CAMERA_MODEL_TYPE_FISHEYE;
+	} else {
+		ULOGW("%s: unknown camera model type '%s'", __func__, str);
+		return VMETA_CAMERA_MODEL_TYPE_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_camera_model_type_to_str(enum vmeta_camera_model_type val)
+{
+	switch (val) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE:
+		return "perspective";
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE:
+		return "fisheye";
+	default:
+		return "unknown";
+	}
+}
+
+
 enum vmeta_video_mode vmeta_video_mode_from_str(const char *str)
 {
 	if (str == NULL)
@@ -1659,15 +1829,6 @@ const char *vmeta_tone_mapping_to_str(enum vmeta_tone_mapping val)
 }
 
 
-static inline float wrap_to_pi(float input)
-{
-	float output = fmodf(input + M_PI, 2 * M_PI) - M_PI;
-	if ((-M_PI) > (input))
-		output += 2 * M_PI;
-	return output;
-}
-
-
 int vmeta_location_horiz_distance(const struct vmeta_location *loc1,
 				  const struct vmeta_location *loc2,
 				  float *horizontal_distance)
@@ -1703,7 +1864,8 @@ int vmeta_location_delta(const struct vmeta_location *loc1,
 			 float *distance,
 			 float *horizontal_distance,
 			 double *bearing,
-			 double *elevation)
+			 double *elevation,
+			 struct vmeta_xyz *cartesian_delta)
 {
 	ULOG_ERRNO_RETURN_ERR_IF(loc1 == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(!loc1->valid, EINVAL);
@@ -1717,7 +1879,19 @@ int vmeta_location_delta(const struct vmeta_location *loc1,
 	double lon1 = loc1->longitude;
 	double lat2 = loc2->latitude;
 	double lon2 = loc2->longitude;
-	double alt_diff = loc2->altitude - loc1->altitude;
+	double alt_diff, _bearing, x, y;
+
+	if (!isnan(loc2->altitude_wgs84ellipsoid) &&
+	    !isnan(loc1->altitude_wgs84ellipsoid)) {
+		alt_diff = loc2->altitude_wgs84ellipsoid -
+			   loc1->altitude_wgs84ellipsoid;
+	} else if (!isnan(loc2->altitude_egm96amsl) &&
+		   !isnan(loc1->altitude_egm96amsl)) {
+		alt_diff = loc2->altitude_egm96amsl - loc1->altitude_egm96amsl;
+	} else {
+		ULOGE("incompatible altitude references");
+		return -EPROTO;
+	}
 
 	ret = vmeta_location_horiz_distance(loc1, loc2, &horiz_dist);
 	if (ret < 0)
@@ -1728,17 +1902,17 @@ int vmeta_location_delta(const struct vmeta_location *loc1,
 	lat2 *= deg_to_rad;
 	lon2 *= deg_to_rad;
 
+	x = cos(lat2) * sin(lon2 - lon1);
+	y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon2 - lon1);
+	_bearing = atan2(x, y);
+
 	/* Horizontal distance */
 	if (horizontal_distance)
 		*horizontal_distance = horiz_dist;
 
 	/* Bearing angle */
-	if (bearing) {
-		double x = cos(lat2) * sin(lon2 - lon1);
-		double y = cos(lat1) * sin(lat2) -
-			   sin(lat1) * cos(lat2) * cos(lon2 - lon1);
-		*bearing = atan2(x, y);
-	}
+	if (bearing)
+		*bearing = _bearing;
 
 	/* Elevation */
 	if (elevation)
@@ -1748,11 +1922,214 @@ int vmeta_location_delta(const struct vmeta_location *loc1,
 	if (distance)
 		*distance = sqrt(horiz_dist * horiz_dist + alt_diff * alt_diff);
 
+	/* Location difference in cartesian coordinates */
+	if (cartesian_delta)
+		vmeta_geo_to_ned(loc2, loc1, cartesian_delta);
+
 	return 0;
 }
 
 
-int vmeta_frame_ltic(struct vmeta_frame *meta,
+static int perspective_transform(const struct vmeta_session *session_meta,
+				 const struct vmeta_xy *principal_point,
+				 float theta,
+				 float phi,
+				 float hfov,
+				 float aspect_ratio,
+				 float *x,
+				 float *y)
+{
+	float tan_theta, tan_theta_pow2, tan_theta_pow4, tan_theta_pow6;
+	float _x, _y, xh, yh, focal_norm;
+
+	/* Check angles validity  */
+	if (theta >= M_PI_2 || hfov >= M_PI || hfov <= 0.f)
+		return -ERANGE;
+
+	/* Precompute powers of tan(theta) */
+	tan_theta = tanf(theta);
+	tan_theta_pow2 = tan_theta * tan_theta;
+	tan_theta_pow4 = tan_theta_pow2 * tan_theta_pow2;
+	tan_theta_pow6 = tan_theta_pow4 * tan_theta_pow2;
+
+	/* Compute xh and yh */
+	xh = tan_theta * cosf(phi);
+	yh = tan_theta * sinf(phi);
+
+	/* Compute normalized focal length and aspect ratio */
+	focal_norm = 0.5 / tanf(hfov / 2.f);
+
+	/* Apply distorsion model */
+	_x = (1 +
+	      session_meta->camera_model.perspective.distortion.r1 *
+		      tan_theta_pow2 +
+	      session_meta->camera_model.perspective.distortion.r2 *
+		      tan_theta_pow4 +
+	      session_meta->camera_model.perspective.distortion.r3 *
+		      tan_theta_pow6) *
+		     xh +
+	     2 * session_meta->camera_model.perspective.distortion.t1 * xh *
+		     yh +
+	     session_meta->camera_model.perspective.distortion.t2 *
+		     (tan_theta_pow2 + 2 * xh * xh);
+	_y = (1 +
+	      session_meta->camera_model.perspective.distortion.r1 *
+		      tan_theta_pow2 +
+	      session_meta->camera_model.perspective.distortion.r2 *
+		      tan_theta_pow4 +
+	      session_meta->camera_model.perspective.distortion.r3 *
+		      tan_theta_pow6) *
+		     yh +
+	     2 * session_meta->camera_model.perspective.distortion.t2 * xh *
+		     yh +
+	     session_meta->camera_model.perspective.distortion.t1 *
+		     (tan_theta_pow2 + 2 * yh * yh);
+
+	/* Scale by focal and shift to top left corner */
+	_x = focal_norm * _x + principal_point->x;
+	_y = focal_norm * _y + principal_point->y;
+
+	/* Normalize y coordinate */
+	_y *= aspect_ratio;
+
+	*x = _x;
+	*y = _y;
+
+	return 0;
+}
+
+
+static int fisheye_transform(const struct vmeta_session *session_meta,
+			     const struct vmeta_xy *principal_point,
+			     float theta,
+			     float phi,
+			     float aspect_ratio,
+			     float *x,
+			     float *y)
+{
+	float theta_norm, theta_norm_pow2, theta_norm_pow3, theta_norm_pow4;
+	float rho, xh, yh, _x, _y;
+
+	/* Precompute power of theta (normalized by pi/2) */
+	theta_norm = 2.f / M_PI * theta;
+	theta_norm_pow2 = theta_norm * theta_norm;
+	theta_norm_pow3 = theta_norm_pow2 * theta_norm;
+	theta_norm_pow4 = theta_norm_pow3 * theta_norm;
+
+	/* Apply radial distorsion model */
+	rho = theta_norm +
+	      session_meta->camera_model.fisheye.polynomial.p2 *
+		      theta_norm_pow2 +
+	      session_meta->camera_model.fisheye.polynomial.p3 *
+		      theta_norm_pow3 +
+	      session_meta->camera_model.fisheye.polynomial.p4 *
+		      theta_norm_pow4;
+
+	/* Compute xh and yh */
+	xh = rho * cosf(phi);
+	yh = rho * sinf(phi);
+
+	/* Scale and shift */
+	_x = session_meta->camera_model.fisheye.affine_matrix.c * xh +
+	     session_meta->camera_model.fisheye.affine_matrix.d * yh +
+	     principal_point->x;
+	_y = session_meta->camera_model.fisheye.affine_matrix.e * xh +
+	     session_meta->camera_model.fisheye.affine_matrix.f * yh +
+	     principal_point->y;
+
+	/* Normalize y coordinate */
+	_y *= aspect_ratio;
+
+	*x = _x;
+	*y = _y;
+
+	return 0;
+}
+
+
+static double modulo_d(double num, double den)
+{
+	double rest;
+
+	/* Handle case (num < 0) / (+/-inf): cannot define positive rest */
+	if ((num < 0.0) && isinf(den))
+		return NAN;
+
+	/* Truncated division */
+	rest = fmod(num, den);
+
+	/* Handle -0.0 */
+	if ((rest == 0.0) && (signbit(rest) != 0))
+		return 0.0;
+
+	/* Ensure that rest is positive: if not replace by rest + |den| */
+	if ((!isnan(rest)) && (rest < 0.0)) {
+		rest += fabs(den);
+
+		/* Handle risk of numerical error for <0 rests close to 0 */
+		if (rest < fabs(den))
+			return rest;
+		return 0.0;
+	}
+
+	return rest;
+}
+
+
+double vmeta_wrapto_d(double input, double bound)
+{
+	double res;
+
+	/* Euclidean division by 2*bound */
+	res = modulo_d(input, bound + bound);
+
+	/* Enforce result in ]-bound, bound] */
+	if (res > bound) {
+		res -= (bound + bound);
+
+		/* Handle risk of numerical error when close to the bound */
+		if (res > -bound)
+			return res;
+		return bound;
+	}
+
+	return res;
+}
+
+
+void vmeta_geo_to_ned(const struct vmeta_location *loc,
+		      const struct vmeta_location *ned_origin,
+		      struct vmeta_xyz *ned_loc)
+{
+	double delta;
+	static const double deg_to_rad = M_PI / 180.0;
+	static const double r_earth = 6371000.0;
+
+	if (!loc || !ned_origin || !ned_loc)
+		return;
+
+	/* Approximation: spherical Earth */
+	delta = loc->latitude - ned_origin->latitude;
+	ned_loc->x =
+		(float)(vmeta_wrapto_d(deg_to_rad * delta, M_PI) * r_earth);
+
+	delta = loc->longitude - ned_origin->longitude;
+	ned_loc->y = (float)(vmeta_wrapto_d(deg_to_rad * delta, M_PI) *
+			     r_earth * cos(deg_to_rad * ned_origin->latitude));
+
+	/* For altitude, try using WGS84 ellipsoid if input data is valid,
+	 * otherwise use EGM96 */
+	ned_loc->z = (float)(ned_origin->altitude_wgs84ellipsoid -
+			     loc->altitude_wgs84ellipsoid);
+	if (isnan(ned_loc->z))
+		ned_loc->z = (float)(ned_origin->altitude_egm96amsl -
+				     loc->altitude_egm96amsl);
+}
+
+
+int vmeta_frame_ltic(const struct vmeta_session *session_meta,
+		     struct vmeta_frame *frame_meta,
+		     float aspect_ratio,
 		     const struct vmeta_location *loc,
 		     float *screen_x,
 		     float *screen_y,
@@ -1760,56 +2137,123 @@ int vmeta_frame_ltic(struct vmeta_frame *meta,
 		     float *distance)
 {
 	int ret;
-	float deg_to_rad = M_PI / 180.;
 	struct vmeta_location cam_loc = {};
-	struct vmeta_euler cam_euler = {};
+	struct vmeta_quaternion cam_in_ned_q = {};
+	struct vmeta_quaternion ned_in_cam_q = {};
+	struct vmeta_xyz delta_ned = {};
+	struct vmeta_xyz delta_cam = {};
+	struct vmeta_xy cam_principal_point = {};
 	double bearing = 0., elevation = 0.;
 	float dist = 0., hdist = 0.;
-	float hfov = 0., vfov = .0;
+	float hfov = 0.;
+	float theta = 0., phi = 0.;
+	float x = 0., y = 0., r = 0.;
+	static const double deg_to_rad = M_PI / 180.0;
 
-	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(session_meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(frame_meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(aspect_ratio <= 0.f, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(!loc->valid, EINVAL);
 
-	/* TODO: take into account the camera roll */
-
-	/* Get camera location from metadata */
-	ret = vmeta_frame_get_location(meta, &cam_loc);
+	/* Get camera location from metadata (fall back to drone location
+	 * if unavailable) */
+	ret = vmeta_frame_get_camera_location(frame_meta, &cam_loc);
+	if (ret == -ENOENT)
+		ret = vmeta_frame_get_location(frame_meta, &cam_loc);
 	if (ret < 0)
 		return ret;
+
 	/* Extract drone to location difference */
 	ret = vmeta_location_delta(
-		&cam_loc, loc, &dist, &hdist, &bearing, &elevation);
+		&cam_loc, loc, &dist, &hdist, &bearing, &elevation, &delta_ned);
 	if (ret < 0)
 		return ret;
-	/* Extract camera euler angles from metadata */
-	ret = vmeta_frame_get_frame_euler(meta, &cam_euler);
-	if (ret < 0)
-		return ret;
+
 	/* Get camera horizontal FOV from metadata */
-	ret = vmeta_frame_get_picture_h_fov(meta, &hfov);
+	ret = vmeta_frame_get_picture_h_fov(frame_meta, &hfov);
 	if (ret < 0)
 		return ret;
 	hfov *= deg_to_rad;
-	/* Get camera vertical FOV from metadata */
-	ret = vmeta_frame_get_picture_v_fov(meta, &vfov);
+
+	/* Extract camera quaternion from metadata */
+	ret = vmeta_frame_get_frame_quat(frame_meta, &cam_in_ned_q);
 	if (ret < 0)
 		return ret;
-	vfov *= deg_to_rad;
-	float yaw_diff = wrap_to_pi(bearing - cam_euler.yaw);
-	float pitch_diff = wrap_to_pi(elevation - cam_euler.pitch);
 
-	/* Check if the location is in the FOV */
-	if (fabsf(yaw_diff) >= hfov / 2 || fabsf(pitch_diff) >= vfov / 2)
+	/* Extract camera principal point from metadata */
+	ret = vmeta_frame_get_camera_principal_point(frame_meta,
+						     &cam_principal_point);
+	if (ret == -ENOENT) {
+		/* Fall back to the image center */
+		cam_principal_point.x = 0.5;
+		cam_principal_point.y = 0.5 / aspect_ratio;
+	} else if (ret < 0) {
+		return ret;
+	}
+
+	/* Compute NED frame expressed in camera frame */
+	ned_in_cam_q = cam_in_ned_q;
+	vmeta_quat_conjugate(&ned_in_cam_q);
+
+	/* Compute delta location in camera frame */
+	delta_cam = delta_ned;
+	vmeta_quat_rotate_vector(&ned_in_cam_q, &delta_cam);
+
+	/* Compute polar angle (theta, with respect to optical axis)
+	 * and azimuthal angle (phi) */
+	r = sqrtf(delta_cam.y * delta_cam.y + delta_cam.z * delta_cam.z);
+	theta = atan2f(r, delta_cam.x);
+	phi = atan2f(delta_cam.z, delta_cam.y);
+
+	/* Check that angle is within validity range of model
+	 * TODO: fetch validity range of model instead of using
+	 * a hardcoded value */
+	if (theta > M_PI_2)
 		return -ERANGE;
-	/* TODO: this works only for rectilinear reprojection */
+
+	/* Project result on camera */
+	switch (session_meta->camera_model.type) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE:
+		ret = perspective_transform(session_meta,
+					    &cam_principal_point,
+					    theta,
+					    phi,
+					    hfov,
+					    aspect_ratio,
+					    &x,
+					    &y);
+		if (ret < 0)
+			return ret;
+		break;
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE:
+		ret = fisheye_transform(session_meta,
+					&cam_principal_point,
+					theta,
+					phi,
+					aspect_ratio,
+					&x,
+					&y);
+		if (ret < 0)
+			return ret;
+		break;
+	default:
+		ULOGE("%s: unknown camera model", __func__);
+		return -EINVAL;
+	}
+
+	/* Check if the coordinates are in the image */
+	if (x < 0. || x > 1. || y < 0. || y > 1.)
+		return -ERANGE;
+
 	if (screen_x)
-		*screen_x = (0.5 * tan(yaw_diff) / tan(hfov / 2)) + 0.5;
+		*screen_x = x;
 	if (screen_y)
-		*screen_y = (-0.5 * tan(pitch_diff) / tan(vfov / 2)) + 0.5;
+		*screen_y = y;
 	if (horizontal_distance)
 		*horizontal_distance = hdist;
 	if (distance)
 		*distance = dist;
+
 	return 0;
 }

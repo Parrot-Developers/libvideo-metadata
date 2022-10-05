@@ -770,6 +770,35 @@ int vmeta_frame_get_frame_timestamp(struct vmeta_frame *meta,
 
 
 /**
+ * Get the camera location from a frame metadata structure.
+ * The function fills the loc structure with the camera location if it is
+ * available according to the metadata type. If the location is not available
+ * for the given type, -ENOENT is returned. When a location is available it
+ * can still be invalid (valid field in the loc structure).
+ * @param meta: pointer to a frame metadata structure
+ * @param loc: pointer to a camera location structure (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_camera_location(struct vmeta_frame *meta,
+				    struct vmeta_location *loc);
+
+
+/**
+ * Get the camera principal point from a frame metadata structure.
+ * The function fills the vec structure with the camera principal point
+ * coordinates if it is available according to the metadata type. If the
+ * principal point is not available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param vec: pointer to a principal point coordinates structure (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_camera_principal_point(struct vmeta_frame *meta,
+					   struct vmeta_xy *vec);
+
+
+/**
  * Get the camera pan angle from a frame metadata structure.
  * The function fills the pan value with the camera pan angle if it is
  * available according to the metadata type. If the camera pan angle is
@@ -954,31 +983,5 @@ VMETA_API
 int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 				  enum vmeta_piloting_mode *mode);
 
-
-/**
- * Location to image coordinates.
- * This function computes the normalized image coordinates from a metadata
- * structure (camera location, angles and FOV) and a location. If the location
- * is not visible in the image, the functions returns -ERANGE. Otherwise the
- * function fills the values pointed by screen_x and screen_y with the
- * normalized coordinates (i.e. in the range 0.0 to 1.0, top-left to
- * bottom-right).
- * @param meta: pointer to a frame metadata structure
- * @param loc: pointer to a location structure
- * @param screen_x: optional pointer to a normalized horizontal coordinate in
- *           the image [0..1] (output)
- * @param screen_y: optional pointer to a normalized vertical coordinate in
- *           the image [0..1] (output)
- * @param horizontal_distance: optional pointer to the horizontal distance
- *           in meters (output)
- * @param distance: optional pointer to the distance in meters (output)
- * @return 0 on success, negative errno value in case of error
- */
-VMETA_API int vmeta_frame_ltic(struct vmeta_frame *meta,
-			       const struct vmeta_location *loc,
-			       float *screen_x,
-			       float *screen_y,
-			       float *horizontal_distance,
-			       float *distance);
 
 #endif /* !_VMETA_FRAME_H_ */

@@ -120,7 +120,7 @@ static void kml_coord(struct vmeta_extract *self, struct vmeta_location *loc)
 			"          %.8f,%.8f,%.3f\n",
 			loc->longitude,
 			loc->latitude,
-			loc->altitude);
+			loc->altitude_egm96amsl);
 	}
 }
 

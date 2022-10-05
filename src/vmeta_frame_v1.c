@@ -245,7 +245,7 @@ int vmeta_frame_v1_streaming_extended_write(
 	vmeta_location_adjust_write(&meta->location, &location);
 
 	/* Pack some fields manually */
-	gps_altitude = (int32_t)(location.altitude * (1 << 8));
+	gps_altitude = (int32_t)(location.altitude_egm96amsl * (1 << 8));
 	gps_altitude_and_sv_count = ((gps_altitude << 8) & 0xffffff00) |
 				    (meta->location.sv_count & 0xff);
 	state = ((meta->binning << 7) & 0x80) | (meta->state & 0x7f);
@@ -374,7 +374,8 @@ int vmeta_frame_v1_streaming_extended_read(
 
 	/* Unpack some fields manually */
 	gps_altitude = (gps_altitude_and_sv_count & 0xffffff00) >> 8;
-	location.altitude = (double)gps_altitude / (1 << 8);
+	location.altitude_wgs84ellipsoid = NAN;
+	location.altitude_egm96amsl = (double)gps_altitude / (1 << 8);
 	location.sv_count = gps_altitude_and_sv_count & 0xff;
 	meta->binning = (state & 0x80) >> 7;
 	meta->state = state & 0x7f;
@@ -489,9 +490,9 @@ size_t vmeta_frame_v1_streaming_extended_csv_header(char *str, size_t maxlen)
 		maxlen - len,
 		"drone_attitude_yaw drone_attitude_pitch drone_attitude_roll "
 		"location_valid location_latitude location_longitude "
-		"location_altitude location_horizontal_accuracy "
-		"location_vertical_accuracy location_sv_count "
-		"altitude distance_from_home "
+		"location_altitude_wgs84ellipsoid location_altitude_egm96amsl "
+		"location_horizontal_accuracy location_vertical_accuracy "
+		"location_sv_count altitude distance_from_home "
 		"speed_x speed_y speed_z "
 		"frame_quat_w frame_quat_x frame_quat_y frame_quat_z "
 		"camera_pan camera_tilt exposure_time gain "
@@ -517,7 +518,7 @@ int vmeta_frame_v1_recording_write(struct vmeta_buffer *buf,
 	vmeta_location_adjust_write(&meta->location, &location);
 
 	/* Pack some fields manually */
-	gps_altitude = (int32_t)(location.altitude * (1 << 8));
+	gps_altitude = (int32_t)(location.altitude_egm96amsl * (1 << 8));
 	gps_altitude_and_sv_count = ((gps_altitude << 8) & 0xffffff00) |
 				    (meta->location.sv_count & 0xff);
 	state = ((meta->binning << 7) & 0x80) | (meta->state & 0x7f);
@@ -595,7 +596,8 @@ int vmeta_frame_v1_recording_read(struct vmeta_buffer *buf,
 
 	/* Unpack some fields manually */
 	gps_altitude = (gps_altitude_and_sv_count & 0xffffff00) >> 8;
-	location.altitude = (double)gps_altitude / (1 << 8);
+	location.altitude_wgs84ellipsoid = NAN;
+	location.altitude_egm96amsl = (double)gps_altitude / (1 << 8);
 	location.sv_count = gps_altitude_and_sv_count & 0xff;
 	meta->binning = (state & 0x80) >> 7;
 	meta->state = state & 0x7f;
@@ -706,9 +708,9 @@ size_t vmeta_frame_v1_recording_csv_header(char *str, size_t maxlen)
 		maxlen - len,
 		"drone_attitude_yaw drone_attitude_pitch drone_attitude_roll "
 		"location_valid location_latitude location_longitude "
-		"location_altitude location_horizontal_accuracy "
-		"location_vertical_accuracy location_sv_count "
-		"altitude distance_from_home "
+		"location_altitude_wgs84ellipsoid location_altitude_egm96amsl "
+		"location_horizontal_accuracy location_vertical_accuracy "
+		"location_sv_count altitude distance_from_home "
 		"speed_x speed_y speed_z "
 		"frame_timestamp "
 		"frame_quat_w frame_quat_x frame_quat_y frame_quat_z "

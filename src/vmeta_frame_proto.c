@@ -543,6 +543,46 @@ vmeta_frame_proto_get_camera_local_position(Vmeta__CameraMetadata *camera)
 }
 
 
+Vmeta__Location *
+vmeta_frame_proto_get_camera_location(Vmeta__CameraMetadata *camera)
+{
+	Vmeta__Location *location;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!camera, EINVAL, NULL);
+
+	if (camera->location)
+		return camera->location;
+	location = calloc(1, sizeof(*location));
+	if (!location) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__location__init(location);
+	camera->location = location;
+	return location;
+}
+
+
+Vmeta__Vector2 *
+vmeta_frame_proto_get_camera_principal_point(Vmeta__CameraMetadata *camera)
+{
+	Vmeta__Vector2 *principal_point;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!camera, EINVAL, NULL);
+
+	if (camera->principal_point)
+		return camera->principal_point;
+	principal_point = calloc(1, sizeof(*principal_point));
+	if (!principal_point) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__vector2__init(principal_point);
+	camera->principal_point = principal_point;
+	return principal_point;
+}
+
+
 Vmeta__DroneMetadata *vmeta_frame_proto_get_drone(Vmeta__TimedMetadata *meta)
 {
 	Vmeta__DroneMetadata *drone;

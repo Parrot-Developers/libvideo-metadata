@@ -28,6 +28,7 @@
 #define _VMETA_PRIV_H_
 
 #include <errno.h>
+#include <float.h>
 #include <inttypes.h>
 #include <json-c/json.h>
 #include <math.h>
@@ -46,6 +47,8 @@
 
 #define ULOG_TAG vmeta
 #include <ulog.h>
+
+#include <futils/futils.h>
 
 #include "video-metadata/vmeta.h"
 
@@ -70,7 +73,8 @@ static inline void vmeta_location_adjust_read(const struct vmeta_location *in,
 	if (!out->valid) {
 		out->latitude = NAN;
 		out->longitude = NAN;
-		out->altitude = NAN;
+		out->altitude_wgs84ellipsoid = NAN;
+		out->altitude_egm96amsl = NAN;
 		out->horizontal_accuracy = NAN;
 		out->vertical_accuracy = NAN;
 		out->sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
@@ -85,7 +89,8 @@ static inline void vmeta_location_adjust_write(const struct vmeta_location *in,
 	if (!in->valid) {
 		out->latitude = 500.0;
 		out->longitude = 500.0;
-		out->altitude = 500.0;
+		out->altitude_wgs84ellipsoid = 500.0;
+		out->altitude_egm96amsl = 500.0;
 		out->horizontal_accuracy = 0.f;
 		out->vertical_accuracy = 0.f;
 		out->sv_count = 0;
@@ -412,6 +417,17 @@ const char *vmeta_link_status_to_str(Vmeta__LinkStatus val);
 int vmeta_frame_convert(struct vmeta_frame *in_frame,
 			struct vmeta_frame **out_frame,
 			enum vmeta_frame_type out_type);
+
+
+/**
+ * Internal math APIs
+ */
+
+/**
+ * Compute the conjugate of a given quaternion
+ * @param quat: pointer to a quaternion structure
+ */
+void vmeta_quat_conjugate(struct vmeta_quaternion *q);
 
 
 #endif /* !_VMETA_PRIV_H_ */

@@ -87,7 +87,16 @@ void vmeta_json_proto_add_location(struct json_object *jobj,
 	jobj_location = json_object_new_object();
 	vmeta_json_add_double(jobj_location, "latitude", location->latitude);
 	vmeta_json_add_double(jobj_location, "longitude", location->longitude);
-	vmeta_json_add_double(jobj_location, "altitude", location->altitude);
+	if (location->altitude_wgs84ellipsoid != 0.) {
+		vmeta_json_add_double(jobj_location,
+				      "altitude_wgs84ellipsoid",
+				      location->altitude_wgs84ellipsoid);
+	}
+	if (location->altitude_egm96amsl != 0.) {
+		vmeta_json_add_double(jobj_location,
+				      "altitude_egm96amsl",
+				      location->altitude_egm96amsl);
+	}
 	if (location->horizontal_accuracy != 0.) {
 		vmeta_json_add_double(jobj_location,
 				      "horizontal_accuracy",
@@ -122,6 +131,24 @@ void vmeta_json_proto_add_ned(struct json_object *jobj,
 	vmeta_json_add_double(jobj_ned, "down", ned->down);
 
 	json_object_object_add(jobj, name, jobj_ned);
+}
+
+
+void vmeta_json_proto_add_vec2(struct json_object *jobj,
+			       const char *name,
+			       const Vmeta__Vector2 *vec2)
+{
+	struct json_object *jobj_vec2;
+
+	if (!vec2) {
+		ULOGD("No %s info", name);
+		return;
+	}
+	jobj_vec2 = json_object_new_object();
+	vmeta_json_add_double(jobj_vec2, "x", vec2->x);
+	vmeta_json_add_double(jobj_vec2, "y", vec2->y);
+
+	json_object_object_add(jobj, name, jobj_vec2);
 }
 
 
@@ -203,6 +230,10 @@ void vmeta_json_proto_add_camera_metadata(struct json_object *jobj,
 	vmeta_json_proto_add_quaternion(
 		jobj_camera, "base_quat", camera->base_quat);
 	vmeta_json_proto_add_quaternion(jobj_camera, "quat", camera->quat);
+	vmeta_json_proto_add_location(
+		jobj_camera, "location", camera->location);
+	vmeta_json_proto_add_vec2(
+		jobj_camera, "principal_point", camera->principal_point);
 	vmeta_json_add_double(
 		jobj_camera, "exposure_time", camera->exposure_time);
 	vmeta_json_add_int(jobj_camera, "iso_gain", camera->iso_gain);

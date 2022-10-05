@@ -34,6 +34,10 @@
 #define VMETA_SESSION_DATE_MAX_LEN 26
 
 
+/* Maximum length of a Parrot serial number */
+#define VMETA_SESSION_PARROT_SERIAL_MAX_LEN 18
+
+
 /**
  * Location used for takeoff location; the main format is ISO 6709 Annex H
  * (eg. "+16.42850589-061.53569552+6.80/")
@@ -61,7 +65,8 @@ enum vmeta_session_location_format {
 	VMETA_SESSION_LOCATION_CSV = 0,
 
 	/* ISO 6709 Annex H string (used on streaming in SDES/RTCP and SDP,
-	 * and recording in a 'meta' box) */
+	 * and recording in a 'meta' box); the altitude is above the
+	 * EGM96 geoid (AMSL) */
 	VMETA_SESSION_LOCATION_ISO6709,
 
 	/* Android-compatible modified ISO 6709 Annex H string
@@ -80,6 +85,45 @@ enum vmeta_session_location_format {
 
 /* Maximum length of a field of view string */
 #define VMETA_SESSION_FOV_MAX_LEN 14
+
+
+/**
+ * Perspective distortion parameters; format is R1,R2,R3,T1,T2 with R1, R2
+ * and R3 the radial distortion coefficients, and T1 and T2 the tangential
+ * distortion coefficients
+ * (see https://support.pix4d.com/hc/en-us/articles/202559089)
+ */
+
+/* Format for a perspective distortion parameters string */
+#define VMETA_SESSION_PERSPECTIVE_DISTORTION_FORMAT "%.8f,%.8f,%.8f,%.8f,%.8f"
+
+/* Maximum length of a perspective distortion parameters string */
+#define VMETA_SESSION_PERSPECTIVE_DISTORTION_MAX_LEN 64
+
+
+/**
+ * Fisheye affine matrix coefficients; format is C,D,E,F
+ * (see https://support.pix4d.com/hc/en-us/articles/202559089)
+ */
+
+/* Format for a fisheye affine matrix coefficients string */
+#define VMETA_SESSION_FISHEYE_AFFINE_MATRIX_FORMAT "%.8f,%.8f,%.8f,%.8f"
+
+/* Maximum length of a fisheye affine matrix coefficients string */
+#define VMETA_SESSION_FISHEYE_AFFINE_MATRIX_MAX_LEN 64
+
+
+/**
+ * Fisheye polynomial coefficients; format is p0,p1,p2,p3,p4
+ * with p0 = 0 and p1 = 1
+ * (see https://support.pix4d.com/hc/en-us/articles/202559089)
+ */
+
+/* Format for a fisheye polynomial coefficients string */
+#define VMETA_SESSION_FISHEYE_POLYNOMIAL_FORMAT "0,1,%.8f,%.8f,%.8f"
+
+/* Maximum length of a fisheye polynomial coefficientss string */
+#define VMETA_SESSION_FISHEYE_POLYNOMIAL_MAX_LEN 64
 
 
 /**
@@ -237,6 +281,21 @@ enum vmeta_stream_sdes_type {
 /* Camera type */
 #define VMETA_STRM_SDES_KEY_CAMERA_TYPE "camera_type"
 
+/* Camera serial number */
+#define VMETA_STRM_SDES_KEY_CAMERA_SERIAL_NUMBER "camera_serial_number"
+
+/* Camera model type */
+#define VMETA_STRM_SDES_KEY_CAMERA_MODEL_TYPE "camera_model_type"
+
+/* Perspective distortion parameters */
+#define VMETA_STRM_SDES_KEY_PERSPECTIVE_DISTORTION "perspective_distortion"
+
+/* Fisheye affine matrix coefficients */
+#define VMETA_STRM_SDES_KEY_FISHEYE_AFFINE_MATRIX "fisheye_affine_matrix"
+
+/* Fisheye polynomial coefficients */
+#define VMETA_STRM_SDES_KEY_FISHEYE_POLYNOMIAL "fisheye_polynomial"
+
 /* Video mode */
 #define VMETA_STRM_SDES_KEY_VIDEO_MODE "video_mode"
 
@@ -361,6 +420,23 @@ enum vmeta_stream_sdp_type {
 /* Camera type */
 #define VMETA_STRM_SDP_KEY_CAMERA_TYPE "X-com-parrot-camera-type"
 
+/* Camera serial number */
+#define VMETA_STRM_SDP_KEY_CAMERA_SERIAL_NUMBER "X-com-parrot-camera-serial"
+
+/* Camera model type */
+#define VMETA_STRM_SDP_KEY_CAMERA_MODEL_TYPE "X-com-parrot-camera-model-type"
+
+/* Perspective distortion parameters */
+#define VMETA_STRM_SDP_KEY_PERSPECTIVE_DISTORTION                              \
+	"X-com-parrot-perspective-distortion"
+
+/* Fisheye affine matrix coefficients */
+#define VMETA_STRM_SDP_KEY_FISHEYE_AFFINE_MATRIX                               \
+	"X-com-parrot-fisheye-affine-matrix"
+
+/* Fisheye polynomial coefficients */
+#define VMETA_STRM_SDP_KEY_FISHEYE_POLYNOMIAL "X-com-parrot-fisheye-polynomial"
+
 /* Video mode */
 #define VMETA_STRM_SDP_KEY_VIDEO_MODE "X-com-parrot-video-mode"
 
@@ -482,6 +558,23 @@ enum vmeta_record_type {
 /* Camera type */
 #define VMETA_REC_META_KEY_CAMERA_TYPE "com.parrot.camera.type"
 
+/* Camera serial number */
+#define VMETA_REC_META_KEY_CAMERA_SERIAL_NUMBER "com.parrot.camera.serial"
+
+/* Camera model type */
+#define VMETA_REC_META_KEY_CAMERA_MODEL_TYPE "com.parrot.camera.model.type"
+
+/* Perspective distortion parameters */
+#define VMETA_REC_META_KEY_PERSPECTIVE_DISTORTION                              \
+	"com.parrot.perspective.distortion"
+
+/* Fisheye affine matrix coefficients */
+#define VMETA_REC_META_KEY_FISHEYE_AFFINE_MATRIX                               \
+	"com.parrot.fisheye.affine.matrix"
+
+/* Fisheye polynomial coefficients */
+#define VMETA_REC_META_KEY_FISHEYE_POLYNOMIAL "com.parrot.fisheye.polynomial"
+
 /* Video mode */
 #define VMETA_REC_META_KEY_VIDEO_MODE "com.parrot.video.mode"
 
@@ -553,6 +646,48 @@ enum vmeta_record_type {
 
 /* Picture vertical field of view */
 #define VMETA_REC_UDTA_JSON_KEY_PICTURE_VERT_FOV "picture_vfov"
+
+
+/* Camera model parameters */
+struct vmeta_camera_model {
+	/* Camera model type */
+	enum vmeta_camera_model_type type;
+
+	union {
+		/* Perspective camera parameters (only valid if
+		 * camera_model_type is VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE */
+		struct {
+			/* Perspective distortion parameters */
+			struct {
+				float r1;
+				float r2;
+				float r3;
+				float t1;
+				float t2;
+			} distortion;
+		} perspective;
+
+		/* Fisheye camera parameters (only valid if camera_model_type
+		 * is VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE */
+		struct {
+			/* Fisheye affine matrix coefficients */
+			struct {
+				float c;
+				float d;
+				float e;
+				float f;
+			} affine_matrix;
+
+			/* Fisheye polynomial coefficients
+			 * (note: p0 = 0 and p1 = 1) */
+			struct {
+				float p2;
+				float p3;
+				float p4;
+			} polynomial;
+		} fisheye;
+	};
+};
 
 
 /* Thermal camera alignment parameters */
@@ -725,6 +860,12 @@ struct vmeta_session {
 	/* Camera type */
 	enum vmeta_camera_type camera_type;
 
+	/* Camera serial number (18 chars string for Parrot products) */
+	char camera_serial_number[32];
+
+	/* Camera model */
+	struct vmeta_camera_model camera_model;
+
 	/* Video mode */
 	enum vmeta_video_mode video_mode;
 
@@ -826,6 +967,129 @@ vmeta_session_fov_write(char *str, size_t len, const struct vmeta_fov *fov);
  */
 VMETA_API
 int vmeta_session_fov_read(const char *str, struct vmeta_fov *fov);
+
+
+/**
+ * Write a perspective distortion parameters string.
+ * The str string must have been previously allocated.
+ * The function writes up to len chars.
+ * @param str: pointer to the string to write to (output)
+ * @param len: maximum length of the string
+ * @param r1: radial distortion parameter R1
+ * @param r2: radial distortion parameter R2
+ * @param r3: radial distortion parameter R3
+ * @param t1: tangential distortion parameter T1
+ * @param t2: tangential distortion parameter T2
+ * @return the length of the string written on success,
+ *         negative errno value in case of error
+ */
+VMETA_API
+ssize_t vmeta_session_perspective_distortion_write(char *str,
+						   size_t len,
+						   float r1,
+						   float r2,
+						   float r3,
+						   float t1,
+						   float t2);
+
+
+/**
+ * Read a perspective distortion parameters string.
+ * The perspective distortion parameters are returned through the 5 float
+ * pointer parameters.
+ * @param str: pointer to the string to read
+ * @param r1: pointer to the radial distortion parameter R1 (output)
+ * @param r2: pointer to the radial distortion parameter R2 (output)
+ * @param r3: pointer to the radial distortion parameter R3 (output)
+ * @param t1: pointer to the tangential distortion parameter T1 (output)
+ * @param t2: pointer to the tangential distortion parameter T2 (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_session_perspective_distortion_read(const char *str,
+					      float *r1,
+					      float *r2,
+					      float *r3,
+					      float *t1,
+					      float *t2);
+
+
+/**
+ * Write a fisheye affine matrix coefficients string.
+ * The str string must have been previously allocated.
+ * The function writes up to len chars.
+ * @param str: pointer to the string to write to (output)
+ * @param len: maximum length of the string
+ * @param c: fisheye affine matrix coefficient C
+ * @param d: fisheye affine matrix coefficient D
+ * @param e: fisheye affine matrix coefficient E
+ * @param f: fisheye affine matrix coefficient F
+ * @return the length of the string written on success,
+ *         negative errno value in case of error
+ */
+VMETA_API
+ssize_t vmeta_session_fisheye_affine_matrix_write(char *str,
+						  size_t len,
+						  float c,
+						  float d,
+						  float e,
+						  float f);
+
+
+/**
+ * Read a fisheye affine matrix coefficients string.
+ * The fisheye affine matrix coefficients are returned through the 4 float
+ * pointer parameters.
+ * @param str: pointer to the string to read
+ * @param c: pointer to the fisheye affine matrix coefficient C (output)
+ * @param d: pointer to the fisheye affine matrix coefficient D (output)
+ * @param e: pointer to the fisheye affine matrix coefficient E (output)
+ * @param f: pointer to the fisheye affine matrix coefficient F (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_session_fisheye_affine_matrix_read(const char *str,
+					     float *c,
+					     float *d,
+					     float *e,
+					     float *f);
+
+
+/**
+ * Write a fisheye polynomial coefficients string.
+ * The str string must have been previously allocated.
+ * The function writes up to len chars.
+ * @param str: pointer to the string to write to (output)
+ * @param len: maximum length of the string
+ * @param p2: fisheye polynomial coefficient p2
+ * @param p3: fisheye polynomial coefficient p3
+ * @param p4: fisheye polynomial coefficient p4
+ * @return the length of the string written on success,
+ *         negative errno value in case of error
+ */
+VMETA_API
+ssize_t vmeta_session_fisheye_polynomial_write(char *str,
+					       size_t len,
+					       float p2,
+					       float p3,
+					       float p4);
+
+
+/**
+ * Read a fisheye polynomial coefficients string.
+ * The fisheye polynomial coefficients are returned through the 3 float
+ * pointer parameters.
+ * @param str: pointer to the string to read
+ * @param p2: pointer to the fisheye polynomial coefficient p2 (output)
+ * @param p3: pointer to the fisheye polynomial coefficient p3 (output)
+ * @param p4: pointer to the fisheye polynomial coefficient p4 (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_session_fisheye_polynomial_read(const char *str,
+					  float *p2,
+					  float *p3,
+					  float *p4);
 
 
 /**

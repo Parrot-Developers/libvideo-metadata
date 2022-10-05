@@ -82,7 +82,8 @@ static void fill_quaternion(struct vmeta_quaternion *quat, bool random)
 static void fill_location(struct vmeta_location *loc, bool random)
 {
 	if (random) {
-		loc->altitude = futils_randomrd();
+		loc->altitude_wgs84ellipsoid = NAN; /* Unused in v3 format */
+		loc->altitude_egm96amsl = futils_randomrd();
 		loc->latitude = futils_randomrd();
 		loc->longitude = futils_randomrd();
 		loc->horizontal_accuracy = futils_randomrd();
@@ -90,7 +91,8 @@ static void fill_location(struct vmeta_location *loc, bool random)
 		loc->sv_count = futils_randomr8();
 		loc->valid = futils_randomr8_maximum(1);
 	} else {
-		loc->altitude = 420.;
+		loc->altitude_wgs84ellipsoid = NAN; /* Unused in v3 format */
+		loc->altitude_egm96amsl = 420.;
 		loc->latitude = 0.1;
 		loc->longitude = 0.2;
 		loc->horizontal_accuracy = 0.3;
