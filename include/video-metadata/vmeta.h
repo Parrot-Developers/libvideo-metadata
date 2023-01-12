@@ -364,78 +364,6 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 
 
 /**
- * Rotate in place a 3D vector with a given rotation quaternion
- * @param quat: pointer to a quaternion structure
- * @param vector: pointer to a 3D vector structure
- */
-VMETA_API
-void vmeta_quat_rotate_vector(const struct vmeta_quaternion *q,
-			      struct vmeta_xyz *vector);
-
-
-/**
- * Wrap a real value within a given bound, returning the unique
- * real x such that input = x + 2*k*bound,
- * where k is an integer, bound is a strictly positive real and such
- * that x lies in ]-bound, bound]
- * @param input: input value
- * @param bound: bound (must be strictly positive)
- * @return the wrapped value
- */
-VMETA_API
-double vmeta_wrapto_d(double input, double bound);
-
-
-/**
- * Convert geographic coordinates into NED cartesian coordinates
- * @param loc: pointer to a geographic location structure
- * @param ned_origin: pointer to a geographic location structure representing
- *                    the origin of the cartesian coordinate system
- * @param ned_loc: pointer to the NED coordinates in meters (output)
- * @return 0 on success, negative errno value in case of error
- */
-VMETA_API
-void vmeta_geo_to_ned(const struct vmeta_location *loc,
-		      const struct vmeta_location *ned_origin,
-		      struct vmeta_xyz *ned_loc);
-
-
-/**
- * Horizontal distance from a first to a second location.
- * @param loc1: pointer to a first location structure
- * @param loc2: pointer to a second location structure
- * @param horizontal_distance: optional pointer to the horizontal distance
- *                             in meters (output)
- * @return 0 on success, negative errno value in case of error
- */
-VMETA_API int vmeta_location_horiz_distance(const struct vmeta_location *loc1,
-					    const struct vmeta_location *loc2,
-					    float *horizontal_distance);
-
-
-/**
- * Distance, bearing and elevation from a first to a second location.
- * @param loc1: pointer to a first location structure
- * @param loc2: pointer to a second location structure
- * @param distance: optional pointer to the distance in meters (output)
- * @param horizontal_distance: optional pointer to the horizontal distance
- *                             in meters (output)
- * @param bearing: optional pointer to a bearing in radians (output)
- * @param elevation: optional pointer to an elevation in radians (output)
- * @param cartesian_delta: optional pointer to the location of loc2
- *                         in a NED cartesian frame at loc1 (output)
- * @return 0 on success, negative errno value in case of error
- */
-VMETA_API int vmeta_location_delta(const struct vmeta_location *loc1,
-				   const struct vmeta_location *loc2,
-				   float *distance,
-				   float *horizontal_distance,
-				   double *bearing,
-				   double *elevation,
-				   struct vmeta_xyz *cartesian_delta);
-
-
-/**
  * Get an enum vmeta_camera_type value from a string.
  * Valid strings are only the suffix of the camera type (eg. 'FRONT').
  * The case is ignored.
@@ -556,37 +484,6 @@ VMETA_API const char *vmeta_tone_mapping_to_str(enum vmeta_tone_mapping val);
 
 #include "video-metadata/vmeta_frame.h"
 #include "video-metadata/vmeta_session.h"
-
-
-/**
- * Location to image coordinates.
- * This function computes the normalized image coordinates from a session
- * metadata structure (camera model), frame metadata structure (camera location,
- * angles and FOV) and a location. If the location is not visible in the image,
- * the functions returns -ERANGE. Otherwise the function fills the values
- * pointed by screen_x and screen_y with the normalized coordinates (i.e. in the
- * range 0.0 to 1.0, top-left to bottom-right).
- * @param session_meta: pointer to a session metadata structure
- * @param frame_meta: pointer to a frame metadata structure
- * @param aspect_ratio: aspect ratio (width / height) of the video frame
- * @param loc: pointer to a location structure
- * @param screen_x: optional pointer to a normalized horizontal coordinate in
- *           the image [0..1] (output)
- * @param screen_y: optional pointer to a normalized vertical coordinate in
- *           the image [0..1] (output)
- * @param horizontal_distance: optional pointer to the horizontal distance
- *           in meters (output)
- * @param distance: optional pointer to the distance in meters (output)
- * @return 0 on success, negative errno value in case of error
- */
-VMETA_API int vmeta_frame_ltic(const struct vmeta_session *session_meta,
-			       struct vmeta_frame *meta,
-			       float aspect_ratio,
-			       const struct vmeta_location *loc,
-			       float *screen_x,
-			       float *screen_y,
-			       float *horizontal_distance,
-			       float *distance);
 
 
 #ifdef __cplusplus

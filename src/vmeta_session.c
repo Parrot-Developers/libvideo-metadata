@@ -2176,7 +2176,9 @@ int vmeta_session_recording_read(const char *key,
 		if (meta->title[0] == '\0')
 			COPY_VALUE(meta->title, value);
 		if (meta->run_date == 0) {
-			ret = vmeta_session_date_read(
+			/* The title might be an ISO 8601 date, but it can
+			 * also be a custom title set by the application. */
+			vmeta_session_date_read(
 				value, &meta->run_date, &meta->run_date_gmtoff);
 		}
 

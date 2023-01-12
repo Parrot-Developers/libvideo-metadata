@@ -48,6 +48,10 @@ int vmeta_json_proto_add_timed_metadata(struct json_object *jobj,
 		jobj, "tracking", timed->tracking);
 	vmeta_json_proto_add_tracking_proposal_metadata(
 		jobj, "proposal", timed->proposal);
+	vmeta_json_proto_add_automation_metadata(
+		jobj, "automation", timed->automation);
+	vmeta_json_proto_add_thermal_metadata(jobj, "thermal", timed->thermal);
+	vmeta_json_proto_add_lfic_metadata(jobj, "lfic", timed->lfic);
 
 out:
 	return res;
@@ -177,6 +181,7 @@ void vmeta_json_proto_add_drone_metadata(struct json_object *jobj,
 {
 	struct json_object *jobj_drone;
 	const ProtobufCEnumValue *flying_state;
+	const ProtobufCEnumValue *piloting_mode;
 
 	if (!drone) {
 		ULOGD("No %s info", name);
@@ -185,6 +190,8 @@ void vmeta_json_proto_add_drone_metadata(struct json_object *jobj,
 
 	flying_state = protobuf_c_enum_descriptor_get_value(
 		&vmeta__flying_state__descriptor, drone->flying_state);
+	piloting_mode = protobuf_c_enum_descriptor_get_value(
+		&vmeta__piloting_mode__descriptor, drone->piloting_mode);
 
 	jobj_drone = json_object_new_object();
 
@@ -198,9 +205,16 @@ void vmeta_json_proto_add_drone_metadata(struct json_object *jobj,
 	vmeta_json_proto_add_ned(jobj_drone, "speed", drone->speed);
 	vmeta_json_add_int(
 		jobj_drone, "battery_percentage", drone->battery_percentage);
+	vmeta_json_add_bool(jobj_drone,
+			    "animation_in_progress",
+			    drone->animation_in_progress);
 	if (flying_state != NULL) {
 		vmeta_json_add_str(
 			jobj_drone, "flying_state", flying_state->name);
+	}
+	if (piloting_mode != NULL) {
+		vmeta_json_add_str(
+			jobj_drone, "piloting_mode", piloting_mode->name);
 	}
 	json_object_object_add(jobj, name, jobj_drone);
 }
@@ -230,6 +244,8 @@ void vmeta_json_proto_add_camera_metadata(struct json_object *jobj,
 	vmeta_json_proto_add_quaternion(
 		jobj_camera, "base_quat", camera->base_quat);
 	vmeta_json_proto_add_quaternion(jobj_camera, "quat", camera->quat);
+	vmeta_json_proto_add_vec3(
+		jobj_camera, "local_position", camera->local_position);
 	vmeta_json_proto_add_location(
 		jobj_camera, "location", camera->location);
 	vmeta_json_proto_add_vec2(
@@ -442,4 +458,108 @@ void vmeta_json_proto_add_tracking_proposal_metadata(
 	vmeta_json_add_int64(jobj_proposal, "timestamp", proposal->timestamp);
 
 	json_object_object_add(jobj, name, jobj_proposal);
+}
+
+
+void vmeta_json_proto_add_automation_metadata(
+	struct json_object *jobj,
+	const char *name,
+	const Vmeta__AutomationMetadata *automation)
+{
+	struct json_object *jobj_automation;
+	const ProtobufCEnumValue *animation;
+
+	if (!automation) {
+		ULOGD("No %s info", name);
+		return;
+	}
+	animation = protobuf_c_enum_descriptor_get_value(
+		&vmeta__animation__descriptor, automation->animation);
+
+	jobj_automation = json_object_new_object();
+	vmeta_json_proto_add_location(
+		jobj_automation, "destination", automation->destination);
+	vmeta_json_proto_add_location(jobj_automation,
+				      "target_location",
+				      automation->target_location);
+	vmeta_json_add_bool(
+		jobj_automation, "follow_me", automation->follow_me);
+	vmeta_json_add_bool(
+		jobj_automation, "lookat_me", automation->lookat_me);
+	vmeta_json_add_bool(
+		jobj_automation, "angle_locked", automation->angle_locked);
+	if (animation) {
+		vmeta_json_add_str(
+			jobj_automation, "animation", animation->name);
+	}
+	json_object_object_add(jobj, name, jobj_automation);
+}
+
+
+void vmeta_json_proto_add_thermal_metadata(
+	struct json_object *jobj,
+	const char *name,
+	const Vmeta__ThermalMetadata *thermal)
+{
+	const ProtobufCEnumValue *calibration_state;
+	struct json_object *jobj_thermal;
+
+	if (!thermal) {
+		ULOGD("No %s info", name);
+		return;
+	}
+	calibration_state = protobuf_c_enum_descriptor_get_value(
+		&vmeta__thermal_calibration_state__descriptor,
+		thermal->calibration_state);
+
+	jobj_thermal = json_object_new_object();
+	if (calibration_state) {
+		vmeta_json_add_str(jobj_thermal,
+				   "calibration_state",
+				   calibration_state->name);
+	}
+
+	vmeta_json_proto_add_thermal_spot(jobj_thermal, "min", thermal->min);
+	vmeta_json_proto_add_thermal_spot(jobj_thermal, "max", thermal->max);
+	vmeta_json_proto_add_thermal_spot(
+		jobj_thermal, "probe", thermal->probe);
+	json_object_object_add(jobj, name, jobj_thermal);
+}
+
+
+void vmeta_json_proto_add_lfic_metadata(struct json_object *jobj,
+					const char *name,
+					const Vmeta__LFICMetadata *lfic)
+{
+	struct json_object *jobj_lfic;
+
+	if (!lfic) {
+		ULOGD("No %s info", name);
+		return;
+	}
+	jobj_lfic = json_object_new_object();
+	vmeta_json_add_double(jobj_lfic, "x", lfic->x);
+	vmeta_json_add_double(jobj_lfic, "y", lfic->y);
+	vmeta_json_proto_add_location(jobj_lfic, "location", lfic->location);
+	vmeta_json_add_double(
+		jobj_lfic, "grid_precision", lfic->grid_precision);
+	json_object_object_add(jobj, name, jobj_lfic);
+}
+
+
+void vmeta_json_proto_add_thermal_spot(struct json_object *jobj,
+				       const char *name,
+				       const Vmeta__ThermalSpot *thermal)
+{
+	struct json_object *jobj_val;
+
+	if (!thermal) {
+		ULOGD("No %s info", name);
+		return;
+	}
+	jobj_val = json_object_new_object();
+	vmeta_json_add_double(jobj_val, "x", thermal->x);
+	vmeta_json_add_double(jobj_val, "y", thermal->y);
+	vmeta_json_add_double(jobj_val, "temp", thermal->temp);
+	json_object_object_add(jobj, name, jobj_val);
 }

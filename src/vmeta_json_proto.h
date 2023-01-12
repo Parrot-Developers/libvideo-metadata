@@ -139,4 +139,26 @@ void vmeta_json_proto_add_tracking_proposal_metadata(
 	const Vmeta__TrackingProposalMetadata *proposal);
 
 
+void vmeta_json_proto_add_thermal_metadata(
+	struct json_object *jobj,
+	const char *name,
+	const Vmeta__ThermalMetadata *thermal);
+
+
+void vmeta_json_proto_add_automation_metadata(
+	struct json_object *jobj,
+	const char *name,
+	const Vmeta__AutomationMetadata *automation);
+
+
+void vmeta_json_proto_add_lfic_metadata(struct json_object *jobj,
+					const char *name,
+					const Vmeta__LFICMetadata *lfic);
+
+
+void vmeta_json_proto_add_thermal_spot(struct json_object *jobj,
+				       const char *name,
+				       const Vmeta__ThermalSpot *thermal);
+
+
 #endif /* !_VMETA_JSON_PROTO_H_ */

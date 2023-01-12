@@ -419,15 +419,4 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 			enum vmeta_frame_type out_type);
 
 
-/**
- * Internal math APIs
- */
-
-/**
- * Compute the conjugate of a given quaternion
- * @param quat: pointer to a quaternion structure
- */
-void vmeta_quat_conjugate(struct vmeta_quaternion *q);
-
-
 #endif /* !_VMETA_PRIV_H_ */
