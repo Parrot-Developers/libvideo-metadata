@@ -18,7 +18,8 @@ protobuf_generate(
 
 add_library(video-metadata-proto ${CMAKE_BINARY_DIR}/vmeta.pb-c.c)
 target_include_directories(video-metadata-proto PUBLIC "$<BUILD_INTERFACE:${INCLUDE_PATH}>")
-target_link_libraries(video-metadata-proto PUBLIC video-metadata-proto-generated ${Protobuf_INCLUDE_DIRS}/../lib/protobuf-c.lib)
+target_link_directories(video-metadata-proto PUBLIC ${Protobuf_INCLUDE_DIRS}/../lib)
+target_link_libraries(video-metadata-proto PUBLIC video-metadata-proto-generated protobuf-c)
 
 
 # # Proto files
