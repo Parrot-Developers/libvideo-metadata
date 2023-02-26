@@ -21,6 +21,9 @@ add_library(video-metadata_compiler_flags INTERFACE)
 target_compile_features(video-metadata_compiler_flags INTERFACE cxx_std_11)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
+set_target_properties(video-metadata PROPERTIES
+                    POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS}
+)
 
 target_include_directories(video-metadata PUBLIC
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -31,5 +34,5 @@ target_compile_definitions(video-metadata PRIVATE "VMETA_API_EXPORTS")
 target_compile_options(video-metadata PRIVATE "-fvisibility=hidden")
 
 find_package(json-c CONFIG REQUIRED)
-target_link_libraries(video-metadata json-c::json-c json-c::json-c-static)
+target_link_libraries(video-metadata json-c::json-c)
 target_link_libraries(video-metadata video-metadata-proto ulog futils video-metadata_compiler_flags)
