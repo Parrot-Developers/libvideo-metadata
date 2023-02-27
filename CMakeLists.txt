@@ -17,8 +17,6 @@ set(LIB_SOURCES
 )
 
 add_library(video-metadata ${LIB_SOURCES})
-add_library(video-metadata_compiler_flags INTERFACE)
-target_compile_features(video-metadata_compiler_flags INTERFACE cxx_std_11)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 set_target_properties(video-metadata PROPERTIES
@@ -32,7 +30,13 @@ target_include_directories(video-metadata PUBLIC
 
 target_compile_definitions(video-metadata PRIVATE "VMETA_API_EXPORTS")
 target_compile_options(video-metadata PRIVATE "-fvisibility=hidden")
+target_compile_options(video-metadata PRIVATE "-std=gnu99")
 
 find_package(json-c CONFIG REQUIRED)
-target_link_libraries(video-metadata json-c::json-c)
-target_link_libraries(video-metadata video-metadata-proto ulog futils video-metadata_compiler_flags)
+target_link_libraries(video-metadata PUBLIC json-c::json-c)
+target_link_libraries(video-metadata PUBLIC 
+                        video-metadata-proto 
+                        video-metadata-proto-generated 
+                        ulog 
+                        futils
+)
