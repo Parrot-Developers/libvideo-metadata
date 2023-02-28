@@ -8,12 +8,11 @@ find_package(Protobuf REQUIRED)
 
 list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobufc_INCLUDE_DIR})
 
+message(${PROTOBUF_PROTOCC})
 
-
-
-
-set(_PROTOBUF_PROTOC "/se/work/oscsj/sw/protobuf-c/bin/protoc-c")
-
+if(NOT DEFINED PROTOBUF_PROTOCC)
+    message(FATAL_ERROR "Unable to locate protoc-c executable please set with -DPROTOBUF_PROTOCC!")
+else()
 
 # Proto files
 set(vmeta_protos
@@ -31,7 +30,7 @@ set(vmeta_protos_hdrs
 
 add_custom_command(
     OUTPUT ${vmeta_protos_srcs}
-    COMMAND ${_PROTOBUF_PROTOC}
+    COMMAND ${PROTOBUF_PROTOCC}
     ARGS --c_out ${CMAKE_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} 
     ${vmeta_protos}
 )
@@ -39,7 +38,7 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT ${vmeta_protos_hdrs}
-    COMMAND ${_PROTOBUF_PROTOC}
+    COMMAND ${PROTOBUF_PROTOCC}
     ARGS --c_out ${CMAKE_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} 
     ${vmeta_protos}
 )
@@ -61,9 +60,4 @@ install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}
 )
 
-
-
-# add_library(protos
-#     ${my_protos_srcs}
-#     ${my_protos_hdrs}
-# )
+endif()
