@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
-project(libvideo-metadata VERSION 1.0)
+project(video-metadata VERSION 1.0)
 
-add_subdirectory(proto)
+add_subdirectory(proto) # video-metadata-proto
 
 set(LIB_SOURCES
         src/vmeta_session.c
@@ -16,20 +16,31 @@ set(LIB_SOURCES
         src/vmeta_utils.c
 )
 
-add_library(video-metadata ${LIB_SOURCES})
-add_library(video-metadata_compiler_flags INTERFACE)
-target_compile_features(video-metadata_compiler_flags INTERFACE cxx_std_11)
+add_library(${PROJECT_NAME} ${LIB_SOURCES})
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
 
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
-target_include_directories(video-metadata PUBLIC
+target_include_directories(${PROJECT_NAME} PUBLIC
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                             $<INSTALL_INTERFACE:include>
 )
 
-target_compile_definitions(video-metadata PRIVATE "VMETA_API_EXPORTS")
-target_compile_options(video-metadata PRIVATE "-fvisibility=hidden")
+target_compile_definitions(${PROJECT_NAME} PRIVATE "VMETA_API_EXPORTS")
+target_compile_options(${PROJECT_NAME} PRIVATE "-fvisibility=hidden")
 
 find_package(json-c CONFIG REQUIRED)
-target_link_libraries(video-metadata json-c::json-c json-c::json-c-static)
-target_link_libraries(video-metadata video-metadata-proto ulog futils video-metadata_compiler_flags)
+target_link_libraries(${PROJECT_NAME} PUBLIC
+                      json-c::json-c json-c::json-c-static
+                      video-metadata-proto 
+                      ulog 
+                      futils 
+                     )
+
+install(TARGETS ${PROJECT_NAME}
+    EXPORT ${PROJECT_NAME}-targets
+    PUBLIC_HEADER DESTINATION include
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+)
