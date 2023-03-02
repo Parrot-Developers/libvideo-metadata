@@ -45,6 +45,8 @@ target_link_libraries(${PROJECT_NAME}
                       json-c::json-c json-c::json-c-static
                       ulog 
                       futils 
+                      mp4
+                      protobuf-c
                      )
 
 install(TARGETS ${PROJECT_NAME}

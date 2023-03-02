@@ -6,15 +6,15 @@ project(video-metadata-proto VERSION 1.0)
 add_library(video-metadata-proto-generated INTERFACE)
 find_package(Protobuf REQUIRED)
 
-list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobufc_INCLUDE_DIR})
+list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobuf_INCLUDE_DIR})
 
 
-if(NOT DEFINED PROTOBUF_PROTOCC)
+if(NOT DEFINED Protobuf_PROTOC_EXECUTABLE)
     message(FATAL_ERROR "Unable to locate protoc-c executable please set with -DPROTOBUF_PROTOCC!")
 else()
 
     message(STATUS 
-        "Using the following binary \"${PROTOBUF_PROTOCC}\" to create vmeta"                          )
+        "Using the following binary \"${Protobuf_PROTOC_EXECUTABLE}\" to create vmeta"                          )
 
     # Proto files
     set(vmeta_protos
@@ -32,7 +32,7 @@ else()
 
     add_custom_command(
         OUTPUT ${vmeta_protos_srcs}
-        COMMAND ${PROTOBUF_PROTOCC}
+        COMMAND ${Protobuf_PROTOC_EXECUTABLE}
         ARGS --c_out ${CMAKE_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} 
         ${vmeta_protos}
     )
@@ -40,7 +40,7 @@ else()
 
     add_custom_command(
         OUTPUT ${vmeta_protos_hdrs}
-        COMMAND ${PROTOBUF_PROTOCC}
+        COMMAND ${Protobuf_PROTOC_EXECUTABLE}
         ARGS --c_out ${CMAKE_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} 
         ${vmeta_protos}
     )
@@ -48,12 +48,13 @@ else()
 
 
     add_library(${PROJECT_NAME} ${vmeta_protos_srcs})
+    target_link_directories(${PROJECT_NAME} PUBLIC ${Protobuf_INCLUDE_DIRS}/../debug/lib)
     target_include_directories(${PROJECT_NAME} PUBLIC 
                                "$<BUILD_INTERFACE:${INCLUDE_PATH}>"
                             )
 
     target_link_directories(${PROJECT_NAME} PRIVATE 
-                             ${Protobufc_INCLUDE_DIR}/../lib)
+                             ${Protobuf_INCLUDE_DIR}/../lib)
 
     target_link_libraries(${PROJECT_NAME} PRIVATE 
                             video-metadata-proto-generated 
