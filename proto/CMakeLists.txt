@@ -7,7 +7,7 @@ add_library(video-metadata-proto-generated INTERFACE)
 find_package(Protobuf CONFIG REQUIRED)
 list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobuf_INCLUDE_DIRS})
 
-target_compile_definitions(video-metadata-proto-generated PRIVATE "PROTOBUF_C_USE_SHARED_LIB")
+target_compile_definitions(video-metadata-proto-generated INTERFACE "PROTOBUF_C_USE_SHARED_LIB")
 
 protobuf_generate(
                     TARGET video-metadata-proto-generated
