@@ -4,8 +4,10 @@ project(libvideo-metadata-proto VERSION 1.0)
 
 
 add_library(video-metadata-proto-generated INTERFACE)
-find_package(Protobuf REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
 list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobuf_INCLUDE_DIRS})
+
+target_compile_definitions(video-metadata-proto-generated PRIVATE "PROTOBUF_C_USE_SHARED_LIB")
 
 protobuf_generate(
                     TARGET video-metadata-proto-generated
@@ -17,9 +19,12 @@ protobuf_generate(
 )
 
 add_library(video-metadata-proto ${CMAKE_BINARY_DIR}/vmeta.pb-c.c)
-target_include_directories(video-metadata-proto PUBLIC "$<BUILD_INTERFACE:${INCLUDE_PATH}>")
+target_include_directories(video-metadata-proto PUBLIC 
+                                "$<BUILD_INTERFACE:${INCLUDE_PATH}>"
+                                $<INSTALL_INTERFACE:include>)
 target_link_directories(video-metadata-proto PUBLIC ${Protobuf_INCLUDE_DIRS}/../lib)
-target_link_libraries(video-metadata-proto PUBLIC video-metadata-proto-generated protobuf-c)
+target_link_libraries(video-metadata-proto PRIVATE video-metadata-proto-generated protobuf-c)
+target_link_libraries(video-metadata-proto PRIVATE protobuf::libprotoc protobuf::libprotobuf protobuf::libprotobuf-lite)
 
 
 # # Proto files

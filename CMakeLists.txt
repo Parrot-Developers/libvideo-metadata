@@ -33,10 +33,12 @@ target_compile_options(video-metadata PRIVATE "-fvisibility=hidden")
 target_compile_options(video-metadata PRIVATE "-std=gnu99")
 
 find_package(json-c CONFIG REQUIRED)
+# TODO PRIVATE
 target_link_libraries(video-metadata PUBLIC json-c::json-c)
 target_link_libraries(video-metadata PUBLIC 
                         video-metadata-proto 
                         video-metadata-proto-generated 
                         ulog 
                         futils
+                        protobuf-c
 )
