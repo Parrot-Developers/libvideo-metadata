@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(video-metadata-proto VERSION 1.0)
 
-
-
 add_library(video-metadata-proto-generated INTERFACE)
 find_package(Protobuf REQUIRED)
 
