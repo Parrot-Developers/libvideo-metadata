@@ -59,6 +59,13 @@ else()
                             protobuf-c)
 
 
+if(WIN32)
+	message(${PROTOBUF_INCLUDE_DIR})
+	file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../bin/*.dll")
+	message(${protobuf_dll})
+        install(FILES ${protobuf_dll} DESTINATION bin)
+endif()
+
     install(TARGETS ${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}-targets
         ARCHIVE DESTINATION lib
