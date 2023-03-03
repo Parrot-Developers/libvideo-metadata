@@ -22,7 +22,7 @@ add_library(video-metadata-proto ${CMAKE_BINARY_DIR}/vmeta.pb-c.c)
 target_include_directories(video-metadata-proto PUBLIC 
                                 "$<BUILD_INTERFACE:${INCLUDE_PATH}>"
                                 $<INSTALL_INTERFACE:include>)
-#target_link_directories(video-metadata-proto PUBLIC ${Protobuf_INCLUDE_DIRS}/../debug/lib)
+target_link_directories(video-metadata-proto PUBLIC ${Protobuf_INCLUDE_DIRS}/../debug/lib)
 target_link_libraries(video-metadata-proto PRIVATE video-metadata-proto-generated protobuf-c)
 target_link_libraries(video-metadata-proto PRIVATE protobuf::libprotoc protobuf::libprotobuf protobuf::libprotobuf-lite)
 
