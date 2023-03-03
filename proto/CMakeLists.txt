@@ -50,9 +50,11 @@ else()
     target_include_directories(${PROJECT_NAME} PUBLIC 
                                "$<BUILD_INTERFACE:${INCLUDE_PATH}>"
                             )
-
-    target_link_directories(${PROJECT_NAME} PRIVATE 
-                             ${Protobuf_INCLUDE_DIR}/../lib)
+    target_include_directories(${PROJECT_NAME} PUBLIC 
+                             ${Protobufc_INCLUDE_DIR}
+			     )
+    target_link_directories(${PROJECT_NAME} PUBLIC 
+                             ${Protobufc_INCLUDE_DIR}/../lib)
 
     target_link_libraries(${PROJECT_NAME} PRIVATE 
                             video-metadata-proto-generated 
@@ -61,18 +63,21 @@ else()
 
 if(WIN32)
 	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-		message(${PROTOBUF_INCLUDE_DIR})
+
+		message("PROTOBUF INCLUDE DIR ${PROTOBUF_INCLUDE_DIR}")
 		file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../debug/bin/*.dll")
-		file(GLOB protobuf_pdb "${PROTOBUF_INCLUDE_DIR}/../debug/bin/*.pdb")
+		file(GLOB protobufc_dll "${Protobufc_INCLUDE_DIR}/../debug/bin/*.dll")
 		message(${protobuf_dll})
-		message(${protobuf_pdb})
+		message(${protobufc_dll})
+		# message(${protobuf_pdb})
         	install(FILES ${protobuf_dll} DESTINATION bin)
-        	install(FILES ${protobuf_pdb} DESTINATION bin)
+		install(FILES ${protobufc_dll} DESTINATION bin)
 	else()
-		message(${PROTOBUF_INCLUDE_DIR})
-		file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../debug/bin/*.dll")
+		file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../bin/*.dll")
+		file(GLOB protobufc_dll "${Protobufc_INCLUDE_DIR}/../bin/*.dll")
 		message(${protobuf_dll})
         	install(FILES ${protobuf_dll} DESTINATION bin)
+		install(FILES ${protobufc_dll} DESTINATION bin)
 	endif()
 endif()
 
