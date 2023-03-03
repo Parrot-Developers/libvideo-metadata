@@ -59,6 +59,23 @@ else()
                             protobuf-c)
 
 
+if(WIN32)
+	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+		message(${PROTOBUF_INCLUDE_DIR})
+		file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../debug/bin/*.dll")
+		file(GLOB protobuf_pdb "${PROTOBUF_INCLUDE_DIR}/../debug/bin/*.pdb")
+		message(${protobuf_dll})
+		message(${protobuf_pdb})
+        	install(FILES ${protobuf_dll} DESTINATION bin)
+        	install(FILES ${protobuf_pdb} DESTINATION bin)
+	else()
+		message(${PROTOBUF_INCLUDE_DIR})
+		file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../debug/bin/*.dll")
+		message(${protobuf_dll})
+        	install(FILES ${protobuf_dll} DESTINATION bin)
+	endif()
+endif()
+
     install(TARGETS ${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}-targets
         ARCHIVE DESTINATION lib
