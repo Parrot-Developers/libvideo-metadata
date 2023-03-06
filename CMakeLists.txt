@@ -47,7 +47,7 @@ target_link_libraries(${PROJECT_NAME}
                       PUBLIC
                       video-metadata-proto 
                       PRIVATE
-                      json-c::json-c json-c::json-c-static
+                      json-c::json-c 
                       ulog 
                       futils 
                       mp4
