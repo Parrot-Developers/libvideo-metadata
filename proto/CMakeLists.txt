@@ -10,9 +10,15 @@ list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobuf_INCLUDE_DIR})
 if(NOT DEFINED Protobuf_PROTOC_EXECUTABLE)
     message(FATAL_ERROR "Unable to locate protoc-c executable please set with -DPROTOBUF_PROTOCC!")
 else()
+    
+    get_filename_component(Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE} DIRECTORY)
+    get_filename_component(Protobuf_PROTOC_GEN_C_EXECUTABLE_EXT ${Protobuf_PROTOC_EXECUTABLE} EXT)
+    set(Protobuf_PROTOC_GEN_C_EXECUTABLE ${Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH}-c/protoc-gen-c${Protobuf_PROTOC_GEN_C_EXECUTABLE_EXT})
 
     message(STATUS 
         "Using the following binary \"${Protobuf_PROTOC_EXECUTABLE}\" to create vmeta"                          )
+    message(STATUS 
+        "Using the following protobuf-c plugin \"${Protobuf_PROTOC_GEN_C_EXECUTABLE}\""                          )
 
     # Proto files
     set(vmeta_protos
@@ -29,21 +35,11 @@ else()
 
 
     add_custom_command(
-        OUTPUT ${vmeta_protos_srcs}
+        OUTPUT ${vmeta_protos_srcs} ${vmeta_protos_hdrs}
         COMMAND ${Protobuf_PROTOC_EXECUTABLE}
-        ARGS --c_out ${CMAKE_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} 
+        ARGS --c_out ${CMAKE_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} --plugin "protoc-gen-c=${Protobuf_PROTOC_GEN_C_EXECUTABLE}" 
         ${vmeta_protos}
     )
-
-
-    add_custom_command(
-        OUTPUT ${vmeta_protos_hdrs}
-        COMMAND ${Protobuf_PROTOC_EXECUTABLE}
-        ARGS --c_out ${CMAKE_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} 
-        ${vmeta_protos}
-    )
-
-
 
     add_library(${PROJECT_NAME} ${vmeta_protos_srcs})
     target_link_directories(${PROJECT_NAME} PUBLIC ${Protobuf_INCLUDE_DIRS}/../debug/lib)
