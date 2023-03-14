@@ -10,11 +10,9 @@ list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobuf_INCLUDE_DIR})
 if(NOT DEFINED Protobuf_PROTOC_EXECUTABLE)
     message(FATAL_ERROR "Unable to locate protoc-c executable please set with -DPROTOBUF_PROTOCC!")
 else()
-    
-    get_filename_component(Protobuf_PROTOC_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE} DIRECTORY)
-    get_filename_component(Protobuf_PROTOC_EXECUTABLE_EXT ${Protobuf_PROTOC_EXECUTABLE} EXT)
-    set(Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE_PATH}-c)
-    set(Protobuf_PROTOC_GEN_C_EXECUTABLE ${Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH}/protoc-gen-c${Protobuf_PROTOC_EXECUTABLE_EXT})
+    get_filename_component(Protobuf_PROTOC_EXECUTABLE_PATH ${Protobuf_INCLUDE_DIR} DIRECTORY)
+    set(Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE_PATH}/tools/protobuf-c)
+    set(Protobuf_PROTOC_GEN_C_EXECUTABLE ${Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH}/protoc-gen-c${CMAKE_EXECUTABLE_SUFFIX})
     if(CMAKE_BUILD_TYPE MATCHES DEBUG)
         list(FIND Protobuf_LIBRARY debug lib_index)
     else()
@@ -71,13 +69,14 @@ else()
             install(CODE "file(GLOB dll_files \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")")
             install(CODE "file(INSTALL DESTINATION \"\$\{CMAKE_INSTALL_PREFIX\}/bin\" TYPE SHARED_LIBRARY FILES \$\{dll_files\})")
     else()
-        install(CODE "set(DEPENDENCY_PATHS \"\$\<TARGET_FILE_DIR:json-c::json-c\>\")")
+        install(CODE "set(DEPENDENCY_PATHS \"${Protobuf_LIBRARY_DIRECTORY}\")")
         install(CODE [[
             file(GET_RUNTIME_DEPENDENCIES
                 LIBRARIES $<TARGET_FILE:video-metadata>
                 RESOLVED_DEPENDENCIES_VAR _r_deps
                 UNRESOLVED_DEPENDENCIES_VAR _u_deps
                 DIRECTORIES ${DEPENDENCY_PATHS}
+                POST_EXCLUDE_REGEXES "^/lib" "^/usr/lib"
             )
             foreach(_file ${_r_deps})
                 file(INSTALL
