@@ -17,7 +17,7 @@ set(LIB_SOURCES
         src/vmeta_utils.c
 )
 
-add_library(${PROJECT_NAME} ${LIB_SOURCES})
+add_library(${PROJECT_NAME} SHARED ${LIB_SOURCES})
 
 # checks if set up rpath exists for install
 if(COMMAND set_up_rpath)
@@ -53,6 +53,38 @@ target_link_libraries(${PROJECT_NAME}
                       mp4
                       protobuf-c
                      )
+
+# to get all header files correctly
+set(${PROJECT_NAME}-headers
+    ${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}/
+)
+install(
+    DIRECTORY ${${PROJECT_NAME}-headers} DESTINATION include/${PROJECT_NAME}
+)
+
+if(WIN32)
+    install(CODE "file(GLOB dll_files \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")")
+    install(CODE "file(INSTALL DESTINATION \"\$\{CMAKE_INSTALL_PREFIX\}/bin\" TYPE SHARED_LIBRARY FILES \$\{dll_files\})")
+else()
+    install(CODE "set(DEPENDENCY_PATHS \"\$\<TARGET_FILE_DIR:json-c::json-c\>\")")
+    install(CODE [[
+        file(GET_RUNTIME_DEPENDENCIES
+            LIBRARIES $<TARGET_FILE:video-metadata>
+            RESOLVED_DEPENDENCIES_VAR _r_deps
+            UNRESOLVED_DEPENDENCIES_VAR _u_deps
+            DIRECTORIES ${DEPENDENCY_PATHS}
+        )
+        foreach(_file ${_r_deps})
+            file(INSTALL
+            DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+            TYPE SHARED_LIBRARY
+            FOLLOW_SYMLINK_CHAIN
+            FILES "${_file}"
+            )
+        endforeach()
+        list(LENGTH _u_deps _u_length)
+    ]])
+endif()
 
 install(TARGETS ${PROJECT_NAME}
     EXPORT ${PROJECT_NAME}-targets

@@ -11,9 +11,18 @@ if(NOT DEFINED Protobuf_PROTOC_EXECUTABLE)
     message(FATAL_ERROR "Unable to locate protoc-c executable please set with -DPROTOBUF_PROTOCC!")
 else()
     
-    get_filename_component(Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE} DIRECTORY)
-    get_filename_component(Protobuf_PROTOC_GEN_C_EXECUTABLE_EXT ${Protobuf_PROTOC_EXECUTABLE} EXT)
-    set(Protobuf_PROTOC_GEN_C_EXECUTABLE ${Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH}-c/protoc-gen-c${Protobuf_PROTOC_GEN_C_EXECUTABLE_EXT})
+    get_filename_component(Protobuf_PROTOC_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE} DIRECTORY)
+    get_filename_component(Protobuf_PROTOC_EXECUTABLE_EXT ${Protobuf_PROTOC_EXECUTABLE} EXT)
+    set(Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE_PATH}-c)
+    set(Protobuf_PROTOC_GEN_C_EXECUTABLE ${Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH}/protoc-gen-c${Protobuf_PROTOC_EXECUTABLE_EXT})
+    if(CMAKE_BUILD_TYPE MATCHES DEBUG)
+        list(FIND Protobuf_LIBRARY debug lib_index)
+    else()
+        list(FIND Protobuf_LIBRARY optimized lib_index)
+    endif()
+    math(EXPR lib_index "${lib_index} + 1")
+    list(GET Protobuf_LIBRARY ${lib_index} Protobuf_LIBRARY_USE)
+    get_filename_component(Protobuf_LIBRARY_DIRECTORY ${Protobuf_LIBRARY_USE} DIRECTORY)   
 
     message(STATUS 
         "Using the following binary \"${Protobuf_PROTOC_EXECUTABLE}\" to create vmeta"                          )
@@ -41,41 +50,46 @@ else()
         ${vmeta_protos}
     )
 
-    add_library(${PROJECT_NAME} ${vmeta_protos_srcs})
-    target_link_directories(${PROJECT_NAME} PUBLIC ${Protobuf_INCLUDE_DIRS}/../debug/lib)
+    add_library(${PROJECT_NAME} SHARED ${vmeta_protos_srcs})
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+                    POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS}
+    )
+    target_link_directories(${PROJECT_NAME} PUBLIC ${Protobuf_LIBRARY_DIRECTORY})
     target_include_directories(${PROJECT_NAME} PUBLIC 
                                "$<BUILD_INTERFACE:${INCLUDE_PATH}>"
                             )
-    target_include_directories(${PROJECT_NAME} PUBLIC 
-                             ${Protobufc_INCLUDE_DIR}
-			     )
-    target_link_directories(${PROJECT_NAME} PUBLIC 
-                             ${Protobufc_INCLUDE_DIR}/../lib)
 
     target_link_libraries(${PROJECT_NAME} PRIVATE 
                             video-metadata-proto-generated 
                             protobuf-c)
 
+    install(FILES ${vmeta_protos_hdrs} DESTINATION include)
+    file(GLOB protobuf_c_hdrs "${Protobuf_INCLUDE_DIR}/protobuf-c/*.h")
+    install(FILES ${protobuf_c_hdrs} DESTINATION include/protobuf-c)
 
-if(WIN32)
-	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-
-		message("PROTOBUF INCLUDE DIR ${PROTOBUF_INCLUDE_DIR}")
-		file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../debug/bin/*.dll")
-		file(GLOB protobufc_dll "${Protobufc_INCLUDE_DIR}/../debug/bin/*.dll")
-		message(STATUS ${protobuf_dll})
-		message(STATUS ${protobufc_dll})
-		# message(${protobuf_pdb})
-        	install(FILES ${protobuf_dll} DESTINATION bin)
-		install(FILES ${protobufc_dll} DESTINATION bin)
-	else()
-		file(GLOB protobuf_dll "${PROTOBUF_INCLUDE_DIR}/../bin/*.dll")
-		file(GLOB protobufc_dll "${Protobufc_INCLUDE_DIR}/../bin/*.dll")
-		message(${protobuf_dll})
-        	install(FILES ${protobuf_dll} DESTINATION bin)
-		install(FILES ${protobufc_dll} DESTINATION bin)
-	endif()
-endif()
+    if(WIN32)
+            install(CODE "file(GLOB dll_files \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")")
+            install(CODE "file(INSTALL DESTINATION \"\$\{CMAKE_INSTALL_PREFIX\}/bin\" TYPE SHARED_LIBRARY FILES \$\{dll_files\})")
+    else()
+        install(CODE "set(DEPENDENCY_PATHS \"\$\<TARGET_FILE_DIR:json-c::json-c\>\")")
+        install(CODE [[
+            file(GET_RUNTIME_DEPENDENCIES
+                LIBRARIES $<TARGET_FILE:video-metadata>
+                RESOLVED_DEPENDENCIES_VAR _r_deps
+                UNRESOLVED_DEPENDENCIES_VAR _u_deps
+                DIRECTORIES ${DEPENDENCY_PATHS}
+            )
+            foreach(_file ${_r_deps})
+                file(INSTALL
+                DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+                TYPE SHARED_LIBRARY
+                FOLLOW_SYMLINK_CHAIN
+                FILES "${_file}"
+                )
+            endforeach()
+            list(LENGTH _u_deps _u_length)
+        ]])
+    endif()
 
     install(TARGETS ${PROJECT_NAME}
         EXPORT ${PROJECT_NAME}-targets
