@@ -66,13 +66,11 @@ if(WIN32)
     install(CODE "file(GLOB dll_files \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")")
     install(CODE "file(INSTALL DESTINATION \"\$\{CMAKE_INSTALL_PREFIX\}/bin\" TYPE SHARED_LIBRARY FILES \$\{dll_files\})")
 else()
-    install(CODE "set(DEPENDENCY_PATHS \"\$\<TARGET_FILE_DIR:json-c::json-c\>\")")
     install(CODE [[
         file(GET_RUNTIME_DEPENDENCIES
             LIBRARIES $<TARGET_FILE:video-metadata>
             RESOLVED_DEPENDENCIES_VAR _r_deps
             UNRESOLVED_DEPENDENCIES_VAR _u_deps
-            DIRECTORIES ${DEPENDENCY_PATHS}
             POST_EXCLUDE_REGEXES "^/lib" "^/usr/lib"
         )
         foreach(_file ${_r_deps})

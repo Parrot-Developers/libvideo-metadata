@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(video-metadata-proto VERSION 1.0)
 
-add_library(video-metadata-proto-generated INTERFACE)
+add_library(${PROJECT_NAME}-generated INTERFACE)
 find_package(Protobuf REQUIRED)
 
 list(APPEND INCLUDE_PATH ${CMAKE_BINARY_DIR} ${Protobuf_INCLUDE_DIR})
@@ -13,7 +13,7 @@ else()
     get_filename_component(Protobuf_PROTOC_EXECUTABLE_PATH ${Protobuf_INCLUDE_DIR} DIRECTORY)
     set(Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH ${Protobuf_PROTOC_EXECUTABLE_PATH}/tools/protobuf-c)
     set(Protobuf_PROTOC_GEN_C_EXECUTABLE ${Protobuf_PROTOC_GEN_C_EXECUTABLE_PATH}/protoc-gen-c${CMAKE_EXECUTABLE_SUFFIX})
-    if(CMAKE_BUILD_TYPE MATCHES DEBUG)
+    if(CMAKE_BUILD_TYPE MATCHES "Debug")
         list(FIND Protobuf_LIBRARY debug lib_index)
     else()
         list(FIND Protobuf_LIBRARY optimized lib_index)
@@ -23,9 +23,11 @@ else()
     get_filename_component(Protobuf_LIBRARY_DIRECTORY ${Protobuf_LIBRARY_USE} DIRECTORY)   
 
     message(STATUS 
-        "Using the following binary \"${Protobuf_PROTOC_EXECUTABLE}\" to create vmeta"                          )
+        "Using the following binary \"${Protobuf_PROTOC_EXECUTABLE}\" to create vmeta")
     message(STATUS 
-        "Using the following protobuf-c plugin \"${Protobuf_PROTOC_GEN_C_EXECUTABLE}\""                          )
+        "Using the following protobuf-c plugin \"${Protobuf_PROTOC_GEN_C_EXECUTABLE}\"")
+    message(STATUS 
+        "Using the following protobuf-c library \"${Protobuf_LIBRARY_DIRECTORY}\"")
 
     # Proto files
     set(vmeta_protos
@@ -58,7 +60,7 @@ else()
                             )
 
     target_link_libraries(${PROJECT_NAME} PRIVATE 
-                            video-metadata-proto-generated 
+                            ${PROJECT_NAME}-generated 
                             protobuf-c)
 
     install(FILES ${vmeta_protos_hdrs} DESTINATION include)
@@ -69,13 +71,11 @@ else()
             install(CODE "file(GLOB dll_files \"${CMAKE_CURRENT_BINARY_DIR}/*.dll\")")
             install(CODE "file(INSTALL DESTINATION \"\$\{CMAKE_INSTALL_PREFIX\}/bin\" TYPE SHARED_LIBRARY FILES \$\{dll_files\})")
     else()
-        install(CODE "set(DEPENDENCY_PATHS \"${Protobuf_LIBRARY_DIRECTORY}\")")
         install(CODE [[
             file(GET_RUNTIME_DEPENDENCIES
                 LIBRARIES $<TARGET_FILE:video-metadata>
                 RESOLVED_DEPENDENCIES_VAR _r_deps
                 UNRESOLVED_DEPENDENCIES_VAR _u_deps
-                DIRECTORIES ${DEPENDENCY_PATHS}
                 POST_EXCLUDE_REGEXES "^/lib" "^/usr/lib"
             )
             foreach(_file ${_r_deps})
