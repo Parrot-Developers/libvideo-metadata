@@ -783,7 +783,7 @@ struct vmeta_session {
 	char software_version[20];
 
 	/* Software build ID (internal unique build identifier) */
-	char build_id[48];
+	char build_id[80];
 
 	/* Video title (unused on the controller side) */
 	char title[80];

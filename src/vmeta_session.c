@@ -323,7 +323,7 @@ int vmeta_session_fisheye_polynomial_read(const char *str,
 
 	ret = sscanf(str, "0,1,%f,%f,%f", p2, p3, p4);
 
-	if (ret != 4)
+	if (ret != 3)
 		return -EPROTO;
 
 	return 0;
