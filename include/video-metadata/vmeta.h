@@ -129,6 +129,9 @@ enum vmeta_video_stop_reason {
 
 	/* Shutdown stop reason */
 	VMETA_VIDEO_STOP_REASON_SHUTDOWN,
+
+	/* Internal error stop reason */
+	VMETA_VIDEO_STOP_REASON_INTERNAL_ERROR,
 };
 
 

@@ -1666,6 +1666,8 @@ enum vmeta_video_stop_reason vmeta_video_stop_reason_from_str(const char *str)
 		return VMETA_VIDEO_STOP_REASON_END_OF_STREAM;
 	} else if (strcasecmp(str, "shutdown") == 0) {
 		return VMETA_VIDEO_STOP_REASON_SHUTDOWN;
+	} else if (strcasecmp(str, "internal-error") == 0) {
+		return VMETA_VIDEO_STOP_REASON_INTERNAL_ERROR;
 	} else {
 		ULOGW("%s: unknown stop reason '%s'", __func__, str);
 		return VMETA_VIDEO_STOP_REASON_UNKNOWN;
@@ -1690,6 +1692,8 @@ const char *vmeta_video_stop_reason_to_str(enum vmeta_video_stop_reason val)
 		return "end-of-stream";
 	case VMETA_VIDEO_STOP_REASON_SHUTDOWN:
 		return "shutdown";
+	case VMETA_VIDEO_STOP_REASON_INTERNAL_ERROR:
+		return "internal-error";
 	default:
 		return "unknown";
 	}
