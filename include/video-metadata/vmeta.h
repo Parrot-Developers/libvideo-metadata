@@ -28,7 +28,11 @@
 #define _VMETA_H_
 
 #include <stdint.h>
-#include <unistd.h>
+#ifndef _MSC_VER
+#  include <unistd.h>
+#else /* !_MSC_VER */
+#  include <io.h>
+#endif /* !_MSC_VER */
 
 #ifdef __cplusplus
 extern "C" {
