@@ -123,11 +123,13 @@ static void fill_thermal_spot(struct vmeta_thermal_spot *spot, bool random)
 		spot->x = futils_randomrf();
 		spot->y = futils_randomrf();
 		spot->temp = futils_randomrf();
+		spot->value = -1; /* Unused in v3 format */
 		spot->valid = futils_randomr8_maximum(1);
 	} else {
 		spot->x = 0.1f;
 		spot->y = 0.2f;
 		spot->temp = 0.3f;
+		spot->value = -1; /* Unused in v3 format */
 		spot->valid = 1;
 	}
 }
@@ -496,29 +498,39 @@ static void meta_compare_proto(struct vmeta_frame *f1, struct vmeta_frame *f2)
 
 	/* Lfic */
 	if (f1->v3.has_lfic) {
-		CU_ASSERT_PTR_NOT_NULL(proto->lfic);
+		CU_ASSERT_PTR_NOT_NULL_FATAL(proto->lfic);
+		CU_ASSERT_FATAL(proto->n_lfic > 0);
+		CU_ASSERT_PTR_NOT_NULL_FATAL(proto->lfic[proto->n_lfic - 1]);
 
-		CU_ASSERT_DOUBLE_EQUAL(
-			f1->v3.lfic.target_x, proto->lfic->x, granularity(14));
-		CU_ASSERT_DOUBLE_EQUAL(
-			f1->v3.lfic.target_y, proto->lfic->y, granularity(14));
-		compare_vmeta_proto_location(&f1->v3.lfic.target_location,
-					     proto->lfic->location,
-					     false);
+		CU_ASSERT_DOUBLE_EQUAL(f1->v3.lfic.target_x,
+				       proto->lfic[proto->n_lfic - 1]->x,
+				       granularity(14));
+		CU_ASSERT_DOUBLE_EQUAL(f1->v3.lfic.target_y,
+				       proto->lfic[proto->n_lfic - 1]->y,
+				       granularity(14));
+		compare_vmeta_proto_location(
+			&f1->v3.lfic.target_location,
+			proto->lfic[proto->n_lfic - 1]->location,
+			false);
 		if (f1->v3.lfic.target_location.valid &&
-		    proto->lfic->location) {
+		    proto->lfic[proto->n_lfic - 1]->location) {
 			CU_ASSERT_DOUBLE_EQUAL(
 				f1->v3.lfic.estimated_precision,
-				proto->lfic->location->horizontal_accuracy,
+				proto->lfic[proto->n_lfic - 1]
+					->location->horizontal_accuracy,
 				granularity(16));
 			CU_ASSERT_DOUBLE_EQUAL(
 				f1->v3.lfic.estimated_precision,
-				proto->lfic->location->vertical_accuracy,
+				proto->lfic[proto->n_lfic - 1]
+					->location->vertical_accuracy,
 				granularity(16));
 		}
-		CU_ASSERT_DOUBLE_EQUAL(f1->v3.lfic.grid_precision,
-				       proto->lfic->grid_precision,
-				       granularity(16));
+		CU_ASSERT_DOUBLE_EQUAL(
+			f1->v3.lfic.grid_precision,
+			proto->lfic[proto->n_lfic - 1]->grid_precision,
+			granularity(16));
+		CU_ASSERT_EQUAL(VMETA__LFIC_TYPE__LFIC_TYPE_COT,
+				proto->lfic[proto->n_lfic - 1]->type);
 
 	} else {
 		CU_ASSERT_PTR_NULL(proto->lfic);

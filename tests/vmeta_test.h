@@ -44,12 +44,20 @@
 #define VMETA_ASSERT_BOTH_NULL_NOTNULL(p1, p2)                                 \
 	CU_ASSERT((p1 == NULL && p2 == NULL) || (p1 && p2))
 
+#define VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(p1, p2)                       \
+	do {                                                                   \
+		VMETA_ASSERT_BOTH_NULL_NOTNULL(p1, p2)                         \
+		if (!p1 || !p2)                                                \
+			return;                                                \
+	} while (0);
+
 #define MONKEY_TEST_COUNT 1000
 
 extern CU_TestInfo s_utils_tests[];
 extern CU_TestInfo s_proto_tests[];
 extern CU_TestInfo s_proto_monkey[];
 extern CU_TestInfo s_proto_gen[];
+extern CU_TestInfo s_session_tests[];
 extern CU_TestInfo s_v3_tests[];
 extern CU_TestInfo s_v3_monkey[];
 extern CU_TestInfo s_v3_gen[];
@@ -90,13 +98,25 @@ void compare_vmeta_thermal_spot(struct vmeta_thermal_spot *t1,
 void compare_proto_thermal_spot(Vmeta__ThermalSpot *t1, Vmeta__ThermalSpot *t2);
 void compare_vmeta_proto_thermal_spot(struct vmeta_thermal_spot *t1,
 				      Vmeta__ThermalSpot *t2);
+void compare_proto_rectf(Vmeta__Rectf *r1, Vmeta__Rectf *r2);
 void compare_proto_bounding_box(Vmeta__BoundingBox *b1, Vmeta__BoundingBox *b2);
 void compare_flying_state(enum vmeta_flying_state f1, Vmeta__FlyingState f2);
 void compare_piloting_mode(enum vmeta_piloting_mode p1, Vmeta__PilotingMode p2);
 void compare_animation_enum(enum vmeta_automation_anim a1, Vmeta__Animation a2);
 void compare_thermal_calib_state(enum vmeta_thermal_calib_state t1,
 				 Vmeta__ThermalCalibrationState t2);
-
+void compare_vmeta_proto_thermal(const struct vmeta_thermal *t1,
+				 const Vmeta__ThermalSessionMetadata *t2);
+void compare_vmeta_proto_thermal_alignment(
+	const struct vmeta_thermal_alignment *t1,
+	const Vmeta__ThermalAlignment *t2);
+void compare_vmeta_proto_thermal_conversion(
+	const struct vmeta_thermal_conversion *t1,
+	const Vmeta__ThermalConversion *t2);
+void compare_vmeta_proto_camera_model(const struct vmeta_camera_model *t1,
+				      const Vmeta__CameraModel *t2);
+void compare_vmeta_proto_overlay(const struct vmeta_overlay *t1,
+				 const Vmeta__Overlay *t2);
 void compare_vmeta_frame_getters(struct vmeta_frame *f1,
 				 struct vmeta_frame *f2);
 void compare_vmeta_frame_v3_getters(struct vmeta_frame *f);

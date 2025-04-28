@@ -14,9 +14,11 @@ de-serialization of video metadata in both streaming and recording.
 
 The library depends on the following Alchemy modules:
 
-* libfutils
+* json
+* libfutil
 * libulog
-* json (optional)
+* libvideo-metadata-protobuf
+* protobuf-c
 
 ## Building
 

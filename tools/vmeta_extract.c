@@ -36,6 +36,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <futils/futils.h>
+#include <libpomp.h>
+#include <transport-packet/tpkt.h>
+#include <video-streaming/vstrm.h>
+
 #ifdef _WIN32
 #	include <winsock2.h>
 #else /* !_WIN32 */
@@ -44,18 +49,19 @@
 
 #include <video-metadata/vmeta.h>
 #ifdef BUILD_LIBMP4
+#	include <video-metadata/vmeta_extract.h>
 #	include <libmp4.h>
 #endif /* BUILD_LIBMP4 */
 #ifdef BUILD_LIBPCAP
 #	include <pcap/pcap.h>
 #endif /* BUILD_LIBPCAP */
 
-#define ULOG_TAG vmeta_extract
+#define ULOG_TAG vmeta_extract_tool
 #include <ulog.h>
-ULOG_DECLARE_TAG(vmeta_extract);
+ULOG_DECLARE_TAG(ULOG_TAG);
 
 
-#define BUF_SIZE 400
+#define BUF_SIZE 1024
 #define STR_SIZE 2000
 #define RTP_DEFAULT_PORT 55004
 #define RTCP_DEFAULT_PORT 55005
@@ -92,6 +98,8 @@ struct vmeta_extract {
 	FILE *json_file;
 	int json_pretty;
 	json_object *json_data;
+
+	struct vstrm_receiver *receiver;
 };
 
 
@@ -141,19 +149,12 @@ static void kml_footer(struct vmeta_extract *self)
 }
 
 
-static int frame_extract(struct vmeta_extract *self,
-			 struct vmeta_buffer *buf,
-			 uint64_t ts,
-			 const char *mime_format)
+static int process_vmeta_frame(struct vmeta_extract *self,
+			       struct vmeta_frame *meta,
+			       uint64_t ts,
+			       const char *mime_format)
 {
 	int ret = 0;
-	struct vmeta_frame *meta;
-
-	ret = vmeta_frame_read2(buf, mime_format, 0, &meta);
-	if (ret < 0) {
-		ULOG_ERRNO("vmeta_frame_read2", -ret);
-		return ret;
-	}
 
 	/* CSV output */
 	if (self->csv_file) {
@@ -229,6 +230,8 @@ static int frame_extract(struct vmeta_extract *self,
 		ret = vmeta_frame_get_location(meta, &loc);
 		if (ret == 0)
 			kml_coord(self, &loc);
+		if (ret == -ENOENT)
+			ret = 0;
 	}
 
 	/* JSON output */
@@ -256,8 +259,33 @@ static int frame_extract(struct vmeta_extract *self,
 	}
 
 	self->is_first = 0;
-
 out:
+	return ret;
+}
+
+
+static int frame_extract(struct vmeta_extract *self,
+			 struct vmeta_buffer *buf,
+			 uint64_t ts,
+			 const char *mime_format)
+{
+	int ret = 0;
+	struct vmeta_frame *meta;
+
+	ret = vmeta_frame_read2(buf, mime_format, 0, &meta);
+	if (ret < 0) {
+		if (ret == -ENODATA) {
+			/* Empty metadata */
+			return 0;
+		}
+		ULOG_ERRNO("vmeta_frame_read2", -ret);
+		return ret;
+	}
+
+	ret = process_vmeta_frame(self, meta, ts, mime_format);
+	if (ret < 0)
+		ULOG_ERRNO("process_vmeta_frame", -ret);
+
 	vmeta_frame_unref(meta);
 	return ret;
 }
@@ -389,12 +417,11 @@ static int mp4_extract(struct vmeta_extract *self)
 	struct mp4_track_info tk;
 	struct mp4_track_sample sample;
 	int ret = 0, i, count, err, found = 0, meta_found = 0;
-	unsigned int id, session_meta_count, k;
+	unsigned int id;
 	uint8_t data[BUF_SIZE];
 	struct vmeta_buffer buf;
 	char *mime_format = NULL;
-	char **keys = NULL;
-	char **values = NULL;
+	uint64_t duration_us = 0;
 
 	/* Read the MP4 file */
 	ret = mp4_demux_open(self->input_file_name, &demux);
@@ -405,27 +432,14 @@ static int mp4_extract(struct vmeta_extract *self)
 		goto cleanup;
 	}
 
-	/* Get the session metadata */
-	memset(&self->session_meta, 0, sizeof(self->session_meta));
-	err = mp4_demux_get_metadata_strings(
-		demux, &session_meta_count, &keys, &values);
-	if (err < 0) {
-		ULOG_ERRNO("mp4_demux_get_metadata_strings", -err);
+	ret = vmeta_extract(NULL, &self->session_meta, &duration_us, demux);
+	if (ret < 0) {
+		ULOG_ERRNO("vmeta_extract", -ret);
 		goto cleanup;
 	}
-	for (k = 0; k < session_meta_count; k++) {
-		char *key = keys[k];
-		char *value = values[k];
-		if ((key) && (value)) {
-			err = vmeta_session_recording_read(
-				key, value, &self->session_meta);
-			if (err < 0) {
-				ULOG_ERRNO("vmeta_session_recording_read",
-					   -err);
-				continue;
-			}
-		}
-	}
+
+	printf("duration: %.2fs\n\n", (float)duration_us / 1000000.);
+
 	err = session_output(self);
 	if (err < 0)
 		goto cleanup;
@@ -599,130 +613,9 @@ struct vmeta_rtcp {
 #	define RTCP_SDES_TYPE_PRIV 8
 
 
-static int read_sdes_item(const uint8_t *buf,
-			  size_t len,
-			  size_t *pos,
-			  uint8_t type,
-			  struct vmeta_session *meta)
-{
-	int res = 0;
-
-	/* Read item type */
-	if (*pos + 1 >= len)
-		return -EIO;
-	size_t item_len = *(buf + *pos);
-	*pos += 1;
-
-	if (item_len > len - *pos)
-		return -EIO;
-
-	if (item_len != 0) {
-		char value[200];
-		char prefix[50];
-		value[0] = '\0';
-		prefix[0] = '\0';
-		if (type == VMETA_STRM_SDES_TYPE_PRIV) {
-			size_t prefix_len = *(buf + *pos);
-			*pos += 1;
-			item_len--;
-			if (prefix_len > item_len)
-				return -EIO;
-			if (prefix_len < sizeof(prefix)) {
-				memcpy(prefix, buf + *pos, prefix_len);
-				*pos += prefix_len;
-				prefix[prefix_len] = '\0';
-				memcpy(value,
-				       buf + *pos,
-				       item_len - prefix_len);
-				*pos += item_len - prefix_len;
-				value[item_len - prefix_len] = '\0';
-			}
-		} else if (item_len < sizeof(value)) {
-			memcpy(value, buf + *pos, item_len);
-			*pos += item_len;
-			value[item_len] = '\0';
-		}
-
-		if (strlen(value) > 0) {
-			res = vmeta_session_streaming_sdes_read(
-				(enum vmeta_stream_sdes_type)type,
-				value,
-				prefix,
-				meta);
-			if (res < 0) {
-				ULOG_ERRNO("vmeta_session_streaming_sdes_read",
-					   -res);
-			}
-		}
-	}
-
-	return res;
-}
-
-
-static int read_sdes_chunk(const uint8_t *buf,
-			   size_t len,
-			   size_t *pos,
-			   struct vmeta_session *meta)
-{
-	int res = 0;
-	uint8_t type = 0;
-
-	/* SSRC */
-	if (*pos + 4 >= len)
-		return -EIO;
-	*pos += 4;
-
-	while (*pos < len) {
-		/* Read item type */
-		if (*pos + 1 > len)
-			return -EIO;
-
-		type = *(buf + *pos);
-		*pos += 1;
-
-		if (type == VMETA_STRM_SDES_TYPE_END)
-			break;
-
-		/* Rewind and read item */
-		res = read_sdes_item(buf, len, pos, type, meta);
-		if (res != 0)
-			break;
-	}
-
-	/* Align */
-	while (*pos < len && *pos % 4 != 0)
-		*pos += 1;
-
-	return res;
-}
-
-static int read_sdes(const uint8_t *buf,
-		     size_t len,
-		     size_t *pos,
-		     const struct vmeta_rtcp *rtcp,
-		     struct vmeta_session *meta)
-{
-	int res = 0;
-	uint8_t chunk_count = 0, i;
-
-	chunk_count = (rtcp->flags >> RTCP_HEADER_FLAGS_COUNT_SHIFT) &
-		      RTCP_HEADER_FLAGS_COUNT_MASK;
-	*pos += RTCP_HEADER_LEN;
-
-	for (i = 0; i < chunk_count; i++) {
-		res = read_sdes_chunk(buf, len, pos, meta);
-		if (res != 0)
-			break;
-	}
-
-	return res;
-}
-
-
-static void pcap_packet_cb(u_char *args,
-			   const struct pcap_pkthdr *header,
-			   const u_char *packet)
+static void pcap_udp_packet_cb(u_char *args,
+			       const struct pcap_pkthdr *header,
+			       const u_char *packet)
 {
 	struct vmeta_extract *self = (struct vmeta_extract *)args;
 	const struct vmeta_ip *ip =
@@ -730,17 +623,14 @@ static void pcap_packet_cb(u_char *args,
 	const struct vmeta_udp *udp =
 		(const struct vmeta_udp *)(packet + ETHER_HEADER_LEN +
 					   IP_HEADER_LEN);
-	const struct vmeta_rtp *rtp =
-		(const struct vmeta_rtp *)(packet + ETHER_HEADER_LEN +
-					   IP_HEADER_LEN + UDP_HEADER_LEN);
-	const uint8_t *payload =
+	const uint8_t *rtp_pkt =
 		(const uint8_t *)(packet + ETHER_HEADER_LEN + IP_HEADER_LEN +
-				  UDP_HEADER_LEN + RTP_HEADER_LEN);
-	const struct vmeta_rtcp *rtcp =
-		(const struct vmeta_rtcp *)(packet + ETHER_HEADER_LEN +
-					    IP_HEADER_LEN + UDP_HEADER_LEN);
-	struct vmeta_buffer buf;
+				  UDP_HEADER_LEN);
+	struct pomp_buffer *buf = NULL;
 	int ret;
+	struct timespec ts = {0, 0};
+	uint64_t ts_us = 0;
+	struct tpkt_packet *pkt = NULL;
 
 	/* Check the packet validity */
 	if (header->caplen < header->len) {
@@ -764,74 +654,111 @@ static void pcap_packet_cb(u_char *args,
 		ULOGE("invalid UDP length: %d", ntohs(udp->len));
 		return;
 	}
-
-	uint16_t dport = ntohs(udp->dport);
-	if (dport == self->rtp_port) {
+	uint16_t dst_port = ntohs(udp->dport);
+	if (dst_port == self->rtp_port) {
 		if (header->len < ETHER_HEADER_LEN + IP_HEADER_LEN +
 					  UDP_HEADER_LEN + RTP_HEADER_LEN) {
 			ULOGE("invalid RTP packet size: %d", header->len);
 			return;
 		}
-		if (((ntohs(rtp->flags) >> RTP_HEADER_FLAGS_EXTENSION_SHIFT) &
-		     RTP_HEADER_FLAGS_EXTENSION_MASK) != 1)
+		size_t rtp_len = ntohs(udp->len) - UDP_HEADER_LEN;
+		buf = pomp_buffer_new_with_data(rtp_pkt, rtp_len);
+		ret = tpkt_new_from_buffer(buf, &pkt);
+		pomp_buffer_unref(buf);
+		buf = NULL;
+		if (ret < 0) {
+			ULOG_ERRNO("tpkt_new_from_buffer", -ret);
+			tpkt_unref(pkt);
 			return;
-		/* Find metadata in RTP header extensions */
-		int cc = ((ntohs(rtp->flags) >>
-			   RTP_HEADER_FLAGS_CSRC_COUNT_SHIFT) &
-			  RTP_HEADER_FLAGS_CSRC_COUNT_MASK);
-		payload += cc * 4;
-		size_t ext_len = ntohs(*((const uint16_t *)payload + 1));
-		ext_len = ext_len * 4 + 4;
-
-		/* Compute a monotonic timestamp in microseconds
-		 * from the RTP timestamp (90000kHz 32 bits) */
-		uint32_t rtp_ts = ntohl(rtp->timestamp);
-		uint64_t ext_rtp_ts =
-			(self->highest_ext_rtp_ts & 0xFFFFFFFF00000000ULL) |
-			((uint64_t)rtp_ts & 0xFFFFFFFFULL);
-		if ((int64_t)ext_rtp_ts - (int64_t)self->prev_ext_rtp_ts <
-		    -2147483648LL)
-			ext_rtp_ts += 0x100000000ULL;
-		else if ((int64_t)ext_rtp_ts - (int64_t)self->prev_ext_rtp_ts >
-			 2147483648LL)
-			ext_rtp_ts -= 0x100000000ULL;
-		if (ext_rtp_ts > self->highest_ext_rtp_ts)
-			self->highest_ext_rtp_ts = ext_rtp_ts;
-		uint64_t ts = (ext_rtp_ts + 90000 / 2) * 1000000 / 90000;
-
-		/* Process the data */
-		vmeta_buffer_set_cdata(&buf, payload, ext_len, 0);
-		ret = frame_extract(self, &buf, ts, NULL);
+		}
+		time_timeval_to_timespec(&header->ts, &ts);
+		time_timespec_to_us(&ts, &ts_us);
+		ret = tpkt_set_timestamp(pkt, ts_us);
+		if (ret < 0) {
+			ULOG_ERRNO("tpkt_set_timestamp", -ret);
+			tpkt_unref(pkt);
+			return;
+		}
+		ret = vstrm_receiver_recv_data(self->receiver, pkt);
+		tpkt_unref(pkt);
+		pkt = NULL;
 		if (ret < 0)
-			return;
-	} else if (dport == self->rtcp_port) {
+			ULOG_ERRNO("vstrm_receiver_recv_data", -ret);
+
+	} else if (dst_port == self->rtcp_port) {
 		if (header->len < ETHER_HEADER_LEN + IP_HEADER_LEN +
 					  UDP_HEADER_LEN + RTCP_HEADER_LEN) {
 			ULOGE("invalid RTCP packet size: %d", header->len);
 			return;
 		}
-		const uint8_t *p = (const uint8_t *)rtcp;
-		size_t offset = 0, len;
-		while (offset + 4 <= header->len - ETHER_HEADER_LEN -
-					     IP_HEADER_LEN - UDP_HEADER_LEN) {
-			rtcp = (const struct vmeta_rtcp *)p;
-			len = ntohs(rtcp->len) * 4 + 4;
-			if (rtcp->type == RTCP_TYPE_SDES) {
-				size_t pos = 0;
-				ret = read_sdes(p,
-						len,
-						&pos,
-						rtcp,
-						&self->session_meta);
-				if (ret < 0) {
-					ULOG_ERRNO("read_sdes", -ret);
-					return;
-				}
-			}
-			p += len;
-			offset += len;
+		size_t rtcp_len = ntohs(udp->len) - UDP_HEADER_LEN;
+		buf = pomp_buffer_new_with_data(rtp_pkt, rtcp_len);
+		ret = tpkt_new_from_buffer(buf, &pkt);
+		pomp_buffer_unref(buf);
+		buf = NULL;
+		if (ret < 0) {
+			ULOG_ERRNO("tpkt_new_from_buffer", -ret);
+			tpkt_unref(pkt);
+			return;
 		}
+		time_timeval_to_timespec(&header->ts, &ts);
+		time_timespec_to_us(&ts, &ts_us);
+		ret = tpkt_set_timestamp(pkt, ts_us);
+		if (ret < 0) {
+			ULOG_ERRNO("tpkt_set_timestamp", -ret);
+			tpkt_unref(pkt);
+			return;
+		}
+		ret = vstrm_receiver_recv_ctrl(self->receiver, pkt);
+		tpkt_unref(pkt);
+		pkt = NULL;
+		if (ret < 0)
+			ULOG_ERRNO("vstrm_receiver_recv_ctrl", -ret);
 	}
+}
+
+
+static int send_ctrl_cb(struct vstrm_receiver *stream,
+			struct tpkt_packet *pkt,
+			void *userdata)
+{
+	return 0;
+}
+
+
+static void codec_info_changed_cb(struct vstrm_receiver *stream,
+				  const struct vstrm_codec_info *info,
+				  void *userdata)
+{
+	ULOGI("%s", __func__);
+}
+
+
+static void recv_frame_cb(struct vstrm_receiver *stream,
+			  struct vstrm_frame *frame,
+			  void *userdata)
+{
+	struct vmeta_extract *self = (struct vmeta_extract *)userdata;
+	int err = 0;
+
+	ULOG_ERRNO_RETURN_IF(self == NULL, EINVAL);
+	err = process_vmeta_frame(self, frame->metadata, 0, NULL);
+	if (err < 0)
+		ULOG_ERRNO("process_vmeta_frame", -err);
+}
+
+
+static void session_metadata_peer_changed_cb(struct vstrm_receiver *stream,
+					     const struct vmeta_session *meta,
+					     void *userdata)
+{
+	ULOGI("%s", __func__);
+	struct vmeta_extract *self = (struct vmeta_extract *)userdata;
+
+	ULOG_ERRNO_RETURN_IF(self == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_IF(meta == NULL, EINVAL);
+
+	self->session_meta = *meta;
 }
 
 
@@ -895,7 +822,7 @@ static int pcap_extract(struct vmeta_extract *self)
 	}
 
 	/* Filter and process packets */
-	err = pcap_loop(pcap, 0, pcap_packet_cb, (u_char *)self);
+	err = pcap_loop(pcap, 0, pcap_udp_packet_cb, (u_char *)self);
 	if (err == -1) {
 		ULOGE("failed to process packets in PCAP file (error: %s)",
 		      pcap_geterr(pcap));
@@ -1098,7 +1025,28 @@ int main(int argc, char *argv[])
 				".pcap",
 				5)) {
 #ifdef BUILD_LIBPCAP
+		struct vstrm_receiver_cfg vstrm_cfg;
+		memset(&vstrm_cfg, 0, sizeof(vstrm_cfg));
+		struct vstrm_receiver_cbs vstrm_cbs = {
+			.send_ctrl = &send_ctrl_cb,
+			.codec_info_changed = &codec_info_changed_cb,
+			.recv_frame = &recv_frame_cb,
+			.session_metadata_peer_changed =
+				&session_metadata_peer_changed_cb,
+			.goodbye = NULL,
+		};
+
+		vstrm_cfg.flags =
+			VSTRM_RECEIVER_FLAGS_ENABLE_RTCP |
+			VSTRM_RECEIVER_FLAGS_ENABLE_RTCP_EXT |
+			VSTRM_RECEIVER_FLAGS_DISABLE_VIDEO_METADATA_CONVERSION;
 		/* .pcap file input */
+		ret = vstrm_receiver_new(
+			&vstrm_cfg, &vstrm_cbs, self, &self->receiver);
+		if (ret < 0) {
+			ULOG_ERRNO("vstrm_receiver_new", -ret);
+			goto cleanup;
+		}
 		ret = pcap_extract(self);
 		if (ret != 0) {
 			status = EXIT_FAILURE;
@@ -1141,6 +1089,9 @@ cleanup:
 	}
 	if (self->json_file_name)
 		json_object_put(self->json_data);
+
+	if (self->receiver)
+		vstrm_receiver_destroy(self->receiver);
 
 	printf("%s\n", (status == EXIT_SUCCESS) ? "Done!" : "Failed!");
 	exit(status);

@@ -37,6 +37,10 @@
 /* Maximum length of a Parrot serial number */
 #define VMETA_SESSION_PARROT_SERIAL_MAX_LEN 18
 
+/* Maximum length of the camera serial number pattern */
+#define VMETA_SESSION_CAMERA_SERIAL_PATTERN_MAX_LEN                            \
+	(sizeof("wide:;tele:") + 2 * VMETA_SESSION_PARROT_SERIAL_MAX_LEN + 1)
+
 
 /**
  * Location used for takeoff location; the main format is ISO 6709 Annex H
@@ -126,6 +130,12 @@ enum vmeta_session_location_format {
 #define VMETA_SESSION_FISHEYE_POLYNOMIAL_MAX_LEN 64
 
 
+/* Format for a header-footer overlay string */
+#define VMETA_SESSION_OVERLAY_HEADER_FOOTER_FORMAT "%.3f,%.3f"
+
+/* Maximum length of a header-footer overlay string */
+#define VMETA_SESSION_OVERLAY_HEADER_FOOTER_MAX_LEN 64
+
 /**
  * Thermal camera alignment parameters; format is yaw,pitch,roll
  * (eg. "-1.355,0.609,89.730")
@@ -164,6 +174,18 @@ enum vmeta_session_location_format {
 #define VMETA_SESSION_THERMAL_SCALE_FACTOR_MAX_LEN 10
 
 
+/**
+ * Principal point; format is "x,y" with x and y both normalized to the picture
+ * width ([0..1]; eg. "0.491170,0.395359")
+ */
+
+/* Format for a principal point string */
+#define VMETA_SESSION_PRINCIPAL_POINT_FORMAT "%.6f,%.6f"
+
+/* Maximum length of a principal point string */
+#define VMETA_SESSION_PRINCIPAL_POINT_MAX_LEN 20
+
+
 /* RTCP SDES packet types used on streaming */
 enum vmeta_stream_sdes_type {
 	/* END: unused for session metadata */
@@ -181,7 +203,7 @@ enum vmeta_stream_sdes_type {
 	/* PHONE: unused for session metadata */
 	VMETA_STRM_SDES_TYPE_PHONE,
 
-	/* LOC: used for takeoff_loc */
+	/* LOC: used for location */
 	VMETA_STRM_SDES_TYPE_LOC,
 
 	/* TOOL: used for software_version */
@@ -224,6 +246,9 @@ enum vmeta_stream_sdes_type {
 
 /* Flight UUID */
 #define VMETA_STRM_SDES_KEY_FLIGHT_ID "flight_id"
+
+/* Takeoff location */
+#define VMETA_STRM_SDES_KEY_TAKEOFF_LOC "takeoff_location"
 
 /* Custom ID */
 #define VMETA_STRM_SDES_KEY_CUSTOM_ID "custom_id"
@@ -281,6 +306,12 @@ enum vmeta_stream_sdes_type {
 /* Camera type */
 #define VMETA_STRM_SDES_KEY_CAMERA_TYPE "camera_type"
 
+/* Camera subtype */
+#define VMETA_STRM_SDES_KEY_CAMERA_SUBTYPE "camera_subtype"
+
+/* Camera spectrum */
+#define VMETA_STRM_SDES_KEY_CAMERA_SPECTRUM "camera_spectrum"
+
 /* Camera serial number */
 #define VMETA_STRM_SDES_KEY_CAMERA_SERIAL_NUMBER "camera_serial_number"
 
@@ -307,6 +338,21 @@ enum vmeta_stream_sdes_type {
 
 /* Image tone mapping */
 #define VMETA_STRM_SDES_KEY_TONE_MAPPING "tone_mapping"
+
+/* Capture timestamp of the first frame */
+#define VMETA_STRM_SDES_KEY_FIRST_FRAME_CAPTURE_TS "first_frame_capture_ts"
+
+/* Sample index of the first frame */
+#define VMETA_STRM_SDES_KEY_FIRST_FRAME_SAMPLE_INDEX "first_frame_sample_index"
+
+/* Unique media identifier of the video */
+#define VMETA_STRM_SDES_KEY_MEDIA_ID "media_id"
+
+/* Resource index of the video in the media ID  */
+#define VMETA_STRM_SDES_KEY_RESOURCE_INDEX "resource_index"
+
+/* Principal point of the camera */
+#define VMETA_STRM_SDES_KEY_PRINCIPAL_POINT "principal_point"
 
 
 /* SDP types used on streaming */
@@ -389,6 +435,9 @@ enum vmeta_stream_sdp_type {
 /* Takeoff location */
 #define VMETA_STRM_SDP_KEY_TAKEOFF_LOC "X-com-parrot-takeoff-loc"
 
+/* Location */
+#define VMETA_STRM_SDP_KEY_LOCATION "X-com-parrot-location"
+
 /* Either session-level or media-level attributes */
 
 /* Picture field of view */
@@ -420,6 +469,12 @@ enum vmeta_stream_sdp_type {
 /* Camera type */
 #define VMETA_STRM_SDP_KEY_CAMERA_TYPE "X-com-parrot-camera-type"
 
+/* Camera subtype */
+#define VMETA_STRM_SDP_KEY_CAMERA_SUBTYPE "X-com-parrot-camera-subtype"
+
+/* Camera spectrum */
+#define VMETA_STRM_SDP_KEY_CAMERA_SPECTRUM "X-com-parrot-camera-spectrum"
+
 /* Camera serial number */
 #define VMETA_STRM_SDP_KEY_CAMERA_SERIAL_NUMBER "X-com-parrot-camera-serial"
 
@@ -448,6 +503,23 @@ enum vmeta_stream_sdp_type {
 
 /* Image tone mapping */
 #define VMETA_STRM_SDP_KEY_TONE_MAPPING "X-com-parrot-tone-mapping"
+
+/* Capture timestamp of the first frame */
+#define VMETA_STRM_SDP_KEY_FIRST_FRAME_CAPTURE_TS                              \
+	"X-com-parrot-first-frame-capture-ts"
+
+/* Sample index of the first frame */
+#define VMETA_STRM_SDP_KEY_FIRST_FRAME_SAMPLE_INDEX                            \
+	"X-com-parrot-first-frame-sample-index"
+
+/* Unique media identifier of the video */
+#define VMETA_STRM_SDP_KEY_MEDIA_ID "X-com-parrot-media-id"
+
+/* Resource index of the video in the media ID  */
+#define VMETA_STRM_SDP_KEY_RESOURCE_INDEX "X-com-parrot-resource-index"
+
+/* Principal point of the camera */
+#define VMETA_STRM_SDP_KEY_PRINCIPAL_POINT "X-com-parrot-principal-point"
 
 
 /* Recording metadata include method */
@@ -485,7 +557,10 @@ enum vmeta_record_type {
 #define VMETA_REC_META_KEY_MEDIA_DATE "com.apple.quicktime.creationdate"
 
 /* Takeoff location */
-#define VMETA_REC_META_KEY_TAKEOFF_LOC "com.apple.quicktime.location.ISO6709"
+#define VMETA_REC_META_KEY_TAKEOFF_LOC "com.parrot.takeoff.loc"
+
+/* Location */
+#define VMETA_REC_META_KEY_LOCATION "com.apple.quicktime.location.ISO6709"
 
 /* Product maker */
 #define VMETA_REC_META_KEY_MAKER "com.apple.quicktime.make"
@@ -555,8 +630,17 @@ enum vmeta_record_type {
 /* Thermal camera scale factor */
 #define VMETA_REC_META_KEY_THERMAL_SCALE_FACTOR "com.parrot.thermal.scalefactor"
 
+/* Principal point of the camera */
+#define VMETA_REC_META_KEY_PRINCIPAL_POINT "com.parrot.principal.point"
+
 /* Camera type */
 #define VMETA_REC_META_KEY_CAMERA_TYPE "com.parrot.camera.type"
+
+/* Camera subtype */
+#define VMETA_REC_META_KEY_CAMERA_SUBTYPE "com.parrot.camera.subtype"
+
+/* Camera spectrum */
+#define VMETA_REC_META_KEY_CAMERA_SPECTRUM "com.parrot.camera.spectrum"
 
 /* Camera serial number */
 #define VMETA_REC_META_KEY_CAMERA_SERIAL_NUMBER "com.parrot.camera.serial"
@@ -575,6 +659,9 @@ enum vmeta_record_type {
 /* Fisheye polynomial coefficients */
 #define VMETA_REC_META_KEY_FISHEYE_POLYNOMIAL "com.parrot.fisheye.polynomial"
 
+/* Header-footer overlay */
+#define VMETA_REC_META_KEY_HEADER_FOOTER "com.parrot.overlay.header.footer"
+
 /* Video mode */
 #define VMETA_REC_META_KEY_VIDEO_MODE "com.parrot.video.mode"
 
@@ -586,6 +673,20 @@ enum vmeta_record_type {
 
 /* Image tone mapping */
 #define VMETA_REC_META_KEY_TONE_MAPPING "com.parrot.tone.mapping"
+
+/* Capture timestamp of the first frame */
+#define VMETA_REC_META_KEY_FIRST_FRAME_CAPTURE_TS                              \
+	"com.parrot.first.frame.capture.ts"
+
+/* Sample index of the first frame */
+#define VMETA_REC_META_KEY_FIRST_FRAME_SAMPLE_INDEX                            \
+	"com.parrot.first.frame.sample.index"
+
+/* Unique media identifier of the video */
+#define VMETA_REC_META_KEY_MEDIA_ID "com.parrot.media.id"
+
+/* Resource index of the video in the media ID  */
+#define VMETA_REC_META_KEY_RESOURCE_INDEX "com.parrot.resource.index"
 
 
 /**
@@ -607,8 +708,8 @@ enum vmeta_record_type {
 /* Media date */
 #define VMETA_REC_UDTA_KEY_MEDIA_DATE "\251day"
 
-/* Takeoff location */
-#define VMETA_REC_UDTA_KEY_TAKEOFF_LOC "\251xyz"
+/* Location */
+#define VMETA_REC_UDTA_KEY_LOCATION "\251xyz"
 
 /* Product maker */
 #define VMETA_REC_UDTA_KEY_MAKER "\251mak"
@@ -637,6 +738,9 @@ enum vmeta_record_type {
 
 /* Takeoff location */
 #define VMETA_REC_UDTA_JSON_KEY_TAKEOFF_LOC "takeoff_position"
+
+/* Location */
+#define VMETA_REC_UDTA_JSON_KEY_LOCATION "location"
 
 /* Media date */
 #define VMETA_REC_UDTA_JSON_KEY_MEDIA_DATE "media_date"
@@ -686,6 +790,24 @@ struct vmeta_camera_model {
 				float p4;
 			} polynomial;
 		} fisheye;
+	};
+};
+
+
+/* Overlay parameters */
+struct vmeta_overlay {
+	/* Overlay type */
+	enum vmeta_overlay_type type;
+
+	union {
+		/* Header-Footer overlay parameters (only valid if
+		 * vmeta_overlay_type is VMETA_OVERLAY_TYPE_HEADER_FOOTER */
+		struct {
+			/* Header height in percentage of the image */
+			float header_height;
+			/* Footer height in percentage of the image */
+			float footer_height;
+		} header_footer;
 	};
 };
 
@@ -756,6 +878,20 @@ struct vmeta_thermal {
 };
 
 
+struct vmeta_principal_point {
+	/* Principal point horizontal and vertical coordinates, with x and y
+	 * both normalized to the picture width ([0..1]) */
+	struct vmeta_xy position;
+
+	/* Principal point validity flag
+	 * (1 if the fields in the structure are valid, 0 otherwise) */
+	uint8_t valid;
+};
+
+
+#include "video-metadata/vmeta_session_proto.h"
+
+
 /* Session metadata used on recording and streaming;
  * for streaming the same structure is used both on the drone and the
  * controller side, but only some of the fields are used on the
@@ -778,7 +914,7 @@ struct vmeta_session {
 	/* Product serial number (18 chars string for Parrot products) */
 	char serial_number[32];
 
-	/* Software version (usually "SofwareName A.B.C"
+	/* Software version (usually "<software_name> A.B.C"
 	 * with A=major, B=minor, C=build) */
 	char software_version[20];
 
@@ -796,7 +932,7 @@ struct vmeta_session {
 
 	/* Media date and time in seconds since the Epoch
 	 * (record only, unused on live streaming) */
-	time_t media_date;
+	uint64_t media_date;
 
 	/* Media date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (record only, unused on live streaming) */
@@ -804,7 +940,7 @@ struct vmeta_session {
 
 	/* Run date and time in seconds since the Epoch
 	 * (unused on the controller side) */
-	time_t run_date;
+	uint64_t run_date;
 
 	/* Run date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (unused on the controller side) */
@@ -816,7 +952,7 @@ struct vmeta_session {
 
 	/* Boot date and time in seconds since the Epoch
 	 * (unused on the controller side) */
-	time_t boot_date;
+	uint64_t boot_date;
 
 	/* Boot date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (unused on the controller side) */
@@ -828,7 +964,7 @@ struct vmeta_session {
 
 	/* Flight date and time in seconds since the Epoch
 	 * (unused on the controller side) */
-	time_t flight_date;
+	uint64_t flight_date;
 
 	/* Flight date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (unused on the controller side) */
@@ -844,7 +980,10 @@ struct vmeta_session {
 	/* Takeoff location (unused on the controller side) */
 	struct vmeta_location takeoff_loc;
 
-	/* Picture field of view (unused on the controller side) */
+	/* Location (unused on the controller side) */
+	struct vmeta_location location;
+
+	/* Picture field of view in degrees (unused on the controller side) */
 	struct vmeta_fov picture_fov;
 
 	/* Thermal camera metadata (unused on the controller side) */
@@ -860,11 +999,25 @@ struct vmeta_session {
 	/* Camera type */
 	enum vmeta_camera_type camera_type;
 
-	/* Camera serial number (18 chars string for Parrot products) */
-	char camera_serial_number[32];
+	/* Camera subtype */
+	enum vmeta_camera_subtype camera_subtype;
+
+	/* Camera spectrum */
+	enum vmeta_camera_spectrum camera_spectrum;
+
+	/* Camera serial number (18 chars string for Parrot products
+	 * or [cam1_name]:[PI_1];[cam2_name]:[PI_2] pattern
+	 * in case of multiple cameras) */
+	char camera_serial_number[VMETA_SESSION_CAMERA_SERIAL_PATTERN_MAX_LEN];
 
 	/* Camera model */
 	struct vmeta_camera_model camera_model;
+
+	/* Overlay */
+	struct vmeta_overlay overlay;
+
+	/* Camera principal point */
+	struct vmeta_principal_point principal_point;
 
 	/* Video mode */
 	enum vmeta_video_mode video_mode;
@@ -877,6 +1030,23 @@ struct vmeta_session {
 
 	/* Image tone mapping */
 	enum vmeta_tone_mapping tone_mapping;
+
+	/* Capture timestamp of the first frame (optional, can be 0; can be used
+	 * for example on raw video to compute the frame capture timestamps) */
+	uint64_t first_frame_capture_ts;
+
+	/* Sample index of the first frame (optional, can be 0; can be used
+	 * for example on raw video to compute the frame capture timestamps) */
+	uint32_t first_frame_sample_index;
+
+	/* Unique media identifier of the video. A media is a single or a group
+	 * of resources [1:N] (optional, can be 0) */
+	uint32_t media_id;
+
+	/* Resource index of the video in the media ID. A resource is a media
+	 * file named using a pattern and a supported extension
+	 * (optional, can be 0) */
+	uint32_t resource_index;
 };
 /* clang-format on */
 
@@ -894,7 +1064,7 @@ struct vmeta_session {
  */
 VMETA_API
 ssize_t
-vmeta_session_date_write(char *str, size_t len, time_t date, long gmtoff);
+vmeta_session_date_write(char *str, size_t len, uint64_t date, long gmtoff);
 
 
 /**
@@ -909,7 +1079,7 @@ vmeta_session_date_write(char *str, size_t len, time_t date, long gmtoff);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_session_date_read(const char *str, time_t *date, long *gmtoff);
+int vmeta_session_date_read(const char *str, uint64_t *date, long *gmtoff);
 
 
 /**
@@ -1093,6 +1263,38 @@ int vmeta_session_fisheye_polynomial_read(const char *str,
 
 
 /**
+ * Write a header-footer overlay string.
+ * The str string must have been previously allocated.
+ * The function writes up to len chars.
+ * @param str: pointer to the string to write to (output)
+ * @param len: maximum length of the string
+ * @param header_height: header height in percentage of the image
+ * @param footer_height: footer height in percentage of the image
+ * @return the length of the string written on success,
+ *         negative errno value in case of error
+ */
+VMETA_API ssize_t
+vmeta_session_overlay_header_footer_write(char *str,
+					  size_t len,
+					  float header_height,
+					  float footer_height);
+
+
+/**
+ * Read a header-footer overlay string.
+ * The header and footer height are returned through the 2 float
+ * pointer parameters.
+ * @param str: pointer to the string to read
+ * @param header_height: header height in percentage of the image (output)
+ * @param footer_height: footer height in percentage of the image (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_session_overlay_header_footer_read(const char *str,
+						       float *header_height,
+						       float *footer_height);
+
+
+/**
  * Write a thermal camera alignment parameters string.
  * The str string must have been previously allocated.
  * The function writes up to len chars.
@@ -1178,6 +1380,33 @@ vmeta_session_thermal_scale_factor_write(char *str, size_t len, double value);
  */
 VMETA_API
 int vmeta_session_thermal_scale_factor_read(const char *str, double *value);
+
+
+/**
+ * Write a principal point string.
+ * The str string must have been previously allocated.
+ * The function writes up to len chars.
+ * @param str: pointer to the string to write to (output)
+ * @param len: maximum length of the string
+ * @param principal_point: pointer to the principal point
+ * @return the length of the string written on success,
+ *         negative errno value in case of error
+ */
+ssize_t vmeta_session_principal_point_write(
+	char *str,
+	size_t len,
+	const struct vmeta_principal_point *principal_point);
+
+
+/**
+ * Read a principal point string.
+ * @param str: pointer to the string to read
+ * @param principal_point: pointer to the principal_point (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+int vmeta_session_principal_point_read(
+	const char *str,
+	struct vmeta_principal_point *principal_point);
 
 
 /**
@@ -1369,6 +1598,42 @@ VMETA_API
 int vmeta_session_to_str(const struct vmeta_session *meta,
 			 char *str,
 			 size_t maxlen);
+
+
+/**
+ * Merge common session metadata fields from an array of session metadata into a
+ * single one. Erase the duplicated fields from the array.
+ * @param meta_list: session metadata array to merge
+ * @param meta_list_count: size of the meta_list array
+ * @param merged_meta: pointer to the merged session metadata (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_session_merge_metadata(struct vmeta_session **meta_list,
+				 size_t meta_list_count,
+				 struct vmeta_session *merged_meta);
+
+
+/**
+ * Compare two session metadata structures.
+ * @param meta_1: vmeta_session to compare with meta_2
+ * @param meta_2: vmeta_session to compare with meta_1
+ * @return 1 if the two are equal, 0 otherwise
+ */
+VMETA_API
+int vmeta_session_cmp(const struct vmeta_session *meta1,
+		      const struct vmeta_session *meta2);
+
+
+/**
+ * Check if a session metadata structure is valid.
+ * Valid means the friendly name and the model field are not empty and the maker
+ * is 'Parrot'.
+ * @param meta: vmeta_session to check
+ * @return 1 if the vmeta_session is valid, 0 otherwise
+ */
+VMETA_API
+int vmeta_session_is_valid(const struct vmeta_session *meta);
 
 
 #endif /* !_VMETA_SESSION_H_ */

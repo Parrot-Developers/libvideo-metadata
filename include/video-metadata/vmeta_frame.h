@@ -113,6 +113,16 @@ enum vmeta_piloting_mode {
 };
 
 
+/* LFIC types */
+enum vmeta_lfic_type {
+	/* Cursor on target LFIC */
+	VMETA_LFIC_TYPE_COT = 0,
+
+	/* User LFIC */
+	VMETA_LFIC_TYPE_USER,
+};
+
+
 /* Follow-me animations */
 enum vmeta_followme_anim {
 	/* No animation in progress */
@@ -321,6 +331,15 @@ struct vmeta_frame_ext_lfic {
  */
 VMETA_API
 const char *vmeta_flying_state_str(enum vmeta_flying_state val);
+
+
+/**
+ * ToString function for enum vmeta_lfic_type.
+ * @param val: lfic type value to convert
+ * @return a string description of the lfic type
+ */
+VMETA_API
+const char *vmeta_lfic_type_str(enum vmeta_lfic_type val);
 
 
 /**
@@ -672,6 +691,20 @@ int vmeta_frame_get_ground_distance(struct vmeta_frame *meta, double *dist);
 
 
 /**
+ * Get the drone altitude above takeoff from a frame metadata structure.
+ * The function fills the alt value with the altitude above takeoff if it is
+ * available according to the metadata type. If the altitude above takeoff is
+ * not available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param alt: pointer to a altitude above takeoff value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_altitude_above_takeoff(struct vmeta_frame *meta,
+					   double *alt);
+
+
+/**
  * Get the drone attitude Euler angles from a frame metadata structure.
  * The function fills the euler structure with the drone attitude if it is
  * available according to the metadata type. If the attitude is not available
@@ -714,7 +747,8 @@ int vmeta_frame_get_frame_euler(struct vmeta_frame *meta,
 
 
 /**
- * Get the frame orientation quaternion from a frame metadata structure.
+ * Get the frame view quaternion in the global frame of reference (NED) from a
+ * frame metadata structure.
  * The function fills the quat structure with the frame orientation if it is
  * available according to the metadata type. If the orientation is not
  * available for the given type, -ENOENT is returned.
@@ -725,6 +759,21 @@ int vmeta_frame_get_frame_euler(struct vmeta_frame *meta,
 VMETA_API
 int vmeta_frame_get_frame_quat(struct vmeta_frame *meta,
 			       struct vmeta_quaternion *quat);
+
+
+/**
+ * Get the fame view quaternion in the local frame of reference from a frame
+ * metadata structure.
+ * The function fills the quat structure with the frame orientation if it is
+ * available according to the metadata type. If the orientation is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param local_quat: pointer to a quaternion structure (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_frame_local_quat(struct vmeta_frame *meta,
+				     struct vmeta_quaternion *local_quat);
 
 
 /**
@@ -767,6 +816,20 @@ int vmeta_frame_get_frame_base_quat(struct vmeta_frame *meta,
 VMETA_API
 int vmeta_frame_get_frame_timestamp(struct vmeta_frame *meta,
 				    uint64_t *timestamp);
+
+
+/**
+ * Get the frame UTC capture timestamp from a frame metadata structure.
+ * The function fills the timestamp value with the frame UTC timestamp if it
+ * is available according to the metadata type. If the UTC timestamp is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param timestamp: pointer to a timestamp value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_frame_utc_timestamp(struct vmeta_frame *meta,
+					uint64_t *timestamp);
 
 
 /**
@@ -905,6 +968,20 @@ int vmeta_frame_get_picture_v_fov(struct vmeta_frame *meta, float *fov);
 
 
 /**
+ * Get the camera zoom level.
+ * The function fills the camera zoom level if it is available according to
+ * the metadata type. If the camera zoom level is not available for the
+ * given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param zoom_level: pointer to a camera zoom level value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_camera_zoom_level(struct vmeta_frame *meta,
+				      float *zoom_level);
+
+
+/**
  * Get the link goodput (throughput estimation) from a frame metadata structure.
  * The function fills the goodput value with the link goodput if it is
  * available according to the metadata type. If the link goodput is not
@@ -982,6 +1059,148 @@ int vmeta_frame_get_flying_state(struct vmeta_frame *meta,
 VMETA_API
 int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 				  enum vmeta_piloting_mode *mode);
+
+
+/**
+ * Get the first location from image coordinates data of CoT type from a frame
+ * metadata structure. The function fills the loc structure and other parameters
+ * with the LFIC data if it is available according to the metadata type. If the
+ * LFIC data is not available, -ENOENT is returned. When a location is available
+ * it can still be invalid (valid field in the loc structure).
+ * @param meta: pointer to a frame metadata structure
+ * @param loc: pointer to a location structure (output)
+ * @param x: pointer to the normalized horizontal image coordinate (output)
+ * @param y: pointer to the normalized vertical image coordinate (output)
+ * @param estimated_precision: pointer to the estimated precision of the
+ *                             location in meters (output)
+ * @param grid_precision: pointer to the grid precision in meters (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_lfic(struct vmeta_frame *meta,
+			 struct vmeta_location *loc,
+			 float *x,
+			 float *y,
+			 double *estimated_precision,
+			 double *grid_precision);
+
+
+/**
+ * Get the number of location from image coordinates data in a frame metadata
+ * stucture.
+ * @param meta: pointer to a frame metadata structure
+ * @param count: pointer to the LFIC count (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_get_lfic_count(struct vmeta_frame *meta,
+					 size_t *count);
+
+
+/**
+ * Get the location from image coordinates data from a frame metadata structure
+ * at a specific index. The function fills the loc structure and other
+ * parameters with the LFIC data if it is available according to the metadata
+ * type. If the LFIC data is not available, -ENOENT is returned. When a location
+ * is available it can still be invalid (valid field in the loc structure).
+ * @param meta: pointer to a frame metadata structure
+ * @param index: index of the LFIC to get
+ * @param loc: pointer to a location structure (output)
+ * @param x: pointer to the normalized horizontal image coordinate (output)
+ * @param y: pointer to the normalized vertical image coordinate (output)
+ * @param estimated_precision: pointer to the estimated precision of the
+ *                             location in meters (output)
+ * @param grid_precision: pointer to the grid precision in meters (output)
+ * @param type: type of the lfic (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
+				  size_t index,
+				  struct vmeta_location *loc,
+				  float *x,
+				  float *y,
+				  double *estimated_precision,
+				  double *grid_precision,
+				  enum vmeta_lfic_type *type);
+
+/**
+ * Get the first location from image coordinates data of a specific type from a
+ * frame metadata structure. The function fills the loc structure and other
+ * parameters with the LFIC data if it is available according to the metadata
+ * type. If the LFIC data is not available, -ENOENT is returned. When a location
+ * is available it can still be invalid (valid field in the loc structure).
+ * @param meta: pointer to a frame metadata structure
+ * @param type: type of the lfic
+ * @param loc: pointer to a location structure (output)
+ * @param x: pointer to the normalized horizontal image coordinate (output)
+ * @param y: pointer to the normalized vertical image coordinate (output)
+ * @param estimated_precision: pointer to the estimated precision of the
+ *                             location in meters (output)
+ * @param grid_precision: pointer to the grid precision in meters (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_lfic_by_type(struct vmeta_frame *meta,
+				 enum vmeta_lfic_type type,
+				 struct vmeta_location *loc,
+				 float *x,
+				 float *y,
+				 double *estimated_precision,
+				 double *grid_precision);
+
+
+/**
+ * Get the tracking target bounding box from a frame metadata structure.
+ * The function fills the box structure with the tracking data
+ * if it is available according to the metadata type. If the tracking data is
+ * not available, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param box: pointer to a tracking box (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_get_tracking_box(struct vmeta_frame *meta,
+					   struct vmeta_rectf *box);
+
+
+/**
+ * Get the camera spectrum from a frame metadata structure.
+ * The function fills the spectrum value with the camera spectrum if it is
+ * available according to the metadata type. If the camera spectrum is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param spectrum: pointer to a camera spectrum value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_camera_spectrum(struct vmeta_frame *meta,
+				    enum vmeta_camera_spectrum *spectrum);
+
+
+/**
+ * Get the thermal mask from a frame metadata structure.
+ * The function fills the mask structure with the thermal mask
+ * if it is available according to the metadata type. If the tracking data is
+ * not available, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param mask: pointer to a thermal max (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int vmeta_frame_get_thermal_mask(struct vmeta_frame *meta,
+					   struct vmeta_rectf *mask);
+
+
+/**
+ * Get the camera subtype from a frame metadata structure.
+ * The function fills the subtype value with the camera subtype if it is
+ * available according to the metadata type. If the camera subtype is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param subtype: pointer to a camera subtype value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API int
+vmeta_frame_get_camera_subtype(struct vmeta_frame *meta,
+			       enum vmeta_camera_subtype *subtype);
 
 
 #endif /* !_VMETA_FRAME_H_ */

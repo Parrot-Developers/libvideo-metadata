@@ -27,6 +27,7 @@
 #ifndef _VMETA_FRAME_PROTO_H_
 #define _VMETA_FRAME_PROTO_H_
 
+#include "vmeta_proto.h"
 #include <vmeta.pb-c.h>
 
 /* "Parrot Video Metadata" protobuf-based RTP extension header identifier */
@@ -38,6 +39,9 @@
 
 /* "Parrot Video Metadata" protobuf-based content encoding */
 #define VMETA_FRAME_PROTO_CONTENT_ENCODING ""
+
+/* "Parrot Video Metadata" protobuf-based empty cookie ("_NOMETA_") in ASCII */
+#define VMETA_FRAME_PROTO_EMPTY_COOKIE (UINT64_C(0x5F4E4F4D4554415F))
 
 
 /* "Parrot Video Metadata" protobuf-based structure definition
@@ -189,12 +193,22 @@ VMETA_API Vmeta__Quaternion *
 vmeta_frame_proto_get_camera_base_quat(Vmeta__CameraMetadata *camera);
 
 /**
- * Get the frame Quaternion part of a CameraMetadata, creating it if required.
+ * Get the frame view quaternion in the global frame of reference (NED) part of
+ * a CameraMetadata, creating it if required.
  * @param camera: the CameraMetadata
  * @return A pointer to the frame Quaternion, or NULL on error.
  */
 VMETA_API Vmeta__Quaternion *
 vmeta_frame_proto_get_camera_quat(Vmeta__CameraMetadata *camera);
+
+/**
+ * Get the frame view quaternion in the local frame of reference part of a
+ * CameraMetadata, creating it if required.
+ * @param camera: the CameraMetadata
+ * @return A pointer to the frame Quaternion, or NULL on error.
+ */
+VMETA_API Vmeta__Quaternion *
+vmeta_frame_proto_get_camera_local_quat(Vmeta__CameraMetadata *camera);
 
 /**
  * Get the Vector3 local position part of a CameraMetadata,
@@ -399,15 +413,25 @@ vmeta_frame_proto_get_thermal_max(Vmeta__ThermalMetadata *thermal);
 VMETA_API Vmeta__ThermalSpot *
 vmeta_frame_proto_get_thermal_probe(Vmeta__ThermalMetadata *thermal);
 
+/**
+ * Get the thermal mask (Rectf) part of a ThermalMetadata, creating it if
+ * required.
+ * @param thermal: the ThermalMetadata
+ * @return A pointer to the thermal mask (Rectf), or NULL on error.
+ */
+VMETA_API Vmeta__Rectf *
+vmeta_frame_proto_get_thermal_mask(Vmeta__ThermalMetadata *thermal);
+
 
 /**
  * Get the LFICMetadata part of a TimedMetadata (root metadata), creating it if
  * required.
  * @param meta: the TimedMetadata
+ * @param index: index of the LFICMetadata to get
  * @return A pointer to the LFICMetadata, or NULL on error.
  */
 VMETA_API Vmeta__LFICMetadata *
-vmeta_frame_proto_get_lfic(Vmeta__TimedMetadata *meta);
+vmeta_frame_proto_get_lfic_by_index(Vmeta__TimedMetadata *meta, size_t index);
 
 /**
  * Get the location Location part of an LFICMetadata, creating it if required.
@@ -448,6 +472,22 @@ vmeta_frame_flying_state_vmeta_to_proto(enum vmeta_flying_state state);
  */
 VMETA_API enum vmeta_piloting_mode
 vmeta_frame_piloting_mode_proto_to_vmeta(Vmeta__PilotingMode mode);
+
+/**
+ * Convert a Vmeta__LficType enum into its vmeta_lfic_type equivalent.
+ *
+ * @param type: type to convert
+ * @return The converted lfic type
+ */
+enum vmeta_lfic_type vmeta_frame_lfic_type_proto_to_vmeta(Vmeta__LficType type);
+
+/**
+ * Convert a vmeta_lfic_type enum into its Vmeta__LficType equivalent.
+ *
+ * @param type: type to convert
+ * @return The converted lfic type
+ */
+Vmeta__LficType vmeta_frame_lfic_type_vmeta_to_proto(enum vmeta_lfic_type type);
 
 /**
  * Convert a vmeta_piloting_mode enum into its Vmeta__PilotingMode equivalent.
@@ -498,5 +538,24 @@ VMETA_API Vmeta__ThermalCalibrationState
 vmeta_frame_thermal_calib_state_vmeta_to_proto(
 	enum vmeta_thermal_calib_state state);
 
+/**
+ * Convert a Vmeta__CameraSpectrum enum into its vmeta_camera_spectrum
+ * equivalent.
+ *
+ * @param spectrum: spectrum to convert
+ * @return The converted camera spectrum
+ */
+VMETA_API enum vmeta_camera_spectrum
+vmeta_frame_camera_spectrum_proto_to_vmeta(Vmeta__CameraSpectrum spectrum);
+
+/**
+ * Convert a vmeta_camera_spectrum enum into its Vmeta__CameraSpectrum
+ * equivalent.
+ *
+ * @param spectrum: spectrum to convert
+ * @return The converted camera spectrum
+ */
+VMETA_API Vmeta__CameraSpectrum
+vmeta_frame_camera_spectrum_vmeta_to_proto(enum vmeta_camera_spectrum spectrum);
 
 #endif /* !_VMETA_FRAME_PROTO_H_ */

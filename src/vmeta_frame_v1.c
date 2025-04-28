@@ -64,7 +64,7 @@ int vmeta_frame_v1_streaming_basic_write(
 	/* Check expected size */
 	if (buf->pos - start != VMETA_FRAME_V1_STREAMING_BASIC_SIZE) {
 		res = -EPROTO;
-		ULOGW("vmeta_frame_v1: bad length: %zu (%u)",
+		ULOGE("vmeta_frame_v1: bad length: %zu (%u)",
 		      buf->pos - start,
 		      VMETA_FRAME_V1_STREAMING_BASIC_SIZE);
 		goto out;
@@ -281,7 +281,7 @@ int vmeta_frame_v1_streaming_extended_write(
 	/* Check expected size */
 	if (buf->pos - start != VMETA_FRAME_V1_STREAMING_EXTENDED_SIZE) {
 		res = -EPROTO;
-		ULOGW("vmeta_frame_v1: bad length: %zu (%u)",
+		ULOGE("vmeta_frame_v1: bad length: %zu (%u)",
 		      buf->pos - start,
 		      VMETA_FRAME_V1_STREAMING_EXTENDED_SIZE);
 		goto out;

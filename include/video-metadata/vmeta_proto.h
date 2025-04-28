@@ -24,56 +24,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "vmeta_test.h"
+#ifndef _VMETA_PROTO_H_
+#define _VMETA_PROTO_H_
 
-ULOG_DECLARE_TAG(ULOG_TAG);
+#include <vmeta.pb-c.h>
 
-static CU_SuiteInfo s_suites[] = {
-	{(char *)"vmeta frame protobuf", NULL, NULL, s_proto_tests},
-	{(char *)"vmeta frame v3", NULL, NULL, s_v3_tests},
-	{(char *)"vmeta session", NULL, NULL, s_session_tests},
-	{(char *)"vmeta utils", NULL, NULL, s_utils_tests},
-	CU_SUITE_INFO_NULL,
-};
+/**
+ * Convert a vmeta_camera_subtype enum into its Vmeta__CameraSubtype equivalent.
+ *
+ * @param type: camera subtype to convert
+ * @return The converted camera subtype
+ */
+VMETA_API Vmeta__CameraSubtype
+vmeta_camera_subtype_vmeta_to_proto(enum vmeta_camera_subtype subtype);
 
-static CU_SuiteInfo s_monkey_suites[] = {
-	{(char *)"protobuf monkey tests", NULL, NULL, s_proto_monkey},
-	{(char *)"meta_v3 monkey tests", NULL, NULL, s_v3_monkey},
-	CU_SUITE_INFO_NULL,
-};
+/**
+ * Convert a Vmeta__CameraSubtype into its vmeta_camera_subtype
+ * equivalent.
+ *
+ * @param subtype: subtype to convert
+ * @return The converted camera subtype
+ */
+VMETA_API enum vmeta_camera_subtype
+vmeta_camera_subtype_proto_to_vmeta(Vmeta__CameraSubtype subtype);
 
-static CU_SuiteInfo s_dump_suites[] = {
-	{(char *)"protobuf reference buffer gen", NULL, NULL, s_proto_gen},
-	{(char *)"meta_v3 reference buffer gen", NULL, NULL, s_v3_gen},
-	CU_SUITE_INFO_NULL,
-};
-
-int main(int argc, char *argv[])
-{
-	int i;
-	CU_initialize_registry();
-	CU_register_suites(s_suites);
-
-	for (i = 1; i < argc; i++) {
-		if (strcmp(argv[i], "monkey") == 0)
-			CU_register_suites(s_monkey_suites);
-		if (strcmp(argv[i], "dump") == 0) {
-			CU_cleanup_registry();
-			CU_initialize_registry();
-			CU_register_suites(s_dump_suites);
-			break;
-		}
-	}
-
-	if (getenv("CUNIT_OUT_NAME") != NULL)
-		CU_set_output_filename(getenv("CUNIT_OUT_NAME"));
-	if (getenv("CUNIT_AUTOMATED") != NULL) {
-		CU_automated_run_tests();
-		CU_list_tests_to_file();
-	} else {
-		CU_basic_set_mode(CU_BRM_VERBOSE);
-		CU_basic_run_tests();
-	}
-	CU_cleanup_registry();
-	return 0;
-}
+#endif /* _VMETA_PROTO_H_ */

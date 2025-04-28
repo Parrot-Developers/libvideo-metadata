@@ -51,8 +51,11 @@ int vmeta_json_proto_add_timed_metadata(struct json_object *jobj,
 	vmeta_json_proto_add_automation_metadata(
 		jobj, "automation", timed->automation);
 	vmeta_json_proto_add_thermal_metadata(jobj, "thermal", timed->thermal);
-	vmeta_json_proto_add_lfic_metadata(jobj, "lfic", timed->lfic);
-
+	vmeta_json_add_array(jobj,
+			     "lfic",
+			     (union array_element_type *)timed->lfic,
+			     timed->n_lfic,
+			     vmeta_json_proto_add_lfic_metadata);
 out:
 	return res;
 }
@@ -199,6 +202,7 @@ void vmeta_json_proto_add_drone_metadata(struct json_object *jobj,
 	vmeta_json_proto_add_location(jobj_drone, "location", drone->location);
 	vmeta_json_add_double(
 		jobj_drone, "ground_distance", drone->ground_distance);
+	vmeta_json_add_double(jobj_drone, "altitude_ato", drone->altitude_ato);
 	vmeta_json_proto_add_ned(jobj_drone, "position", drone->position);
 	vmeta_json_proto_add_vec3(
 		jobj_drone, "local_position", drone->local_position);
@@ -224,6 +228,8 @@ void vmeta_json_proto_add_camera_metadata(struct json_object *jobj,
 					  const char *name,
 					  const Vmeta__CameraMetadata *camera)
 {
+	const ProtobufCEnumValue *spectrum;
+	const ProtobufCEnumValue *subtype;
 	struct json_object *jobj_camera;
 
 	if (!camera) {
@@ -231,6 +237,11 @@ void vmeta_json_proto_add_camera_metadata(struct json_object *jobj,
 		return;
 	}
 	jobj_camera = json_object_new_object();
+
+	spectrum = protobuf_c_enum_descriptor_get_value(
+		&vmeta__camera_spectrum__descriptor, camera->spectrum);
+	subtype = protobuf_c_enum_descriptor_get_value(
+		&vmeta__camera_subtype__descriptor, camera->subtype);
 
 	vmeta_json_add_int64(jobj_camera, "timestamp", camera->timestamp);
 	if ((camera->utc_timestamp != 0) &&
@@ -244,6 +255,8 @@ void vmeta_json_proto_add_camera_metadata(struct json_object *jobj,
 	vmeta_json_proto_add_quaternion(
 		jobj_camera, "base_quat", camera->base_quat);
 	vmeta_json_proto_add_quaternion(jobj_camera, "quat", camera->quat);
+	vmeta_json_proto_add_quaternion(
+		jobj_camera, "local_quat", camera->local_quat);
 	vmeta_json_proto_add_vec3(
 		jobj_camera, "local_position", camera->local_position);
 	vmeta_json_proto_add_location(
@@ -257,6 +270,11 @@ void vmeta_json_proto_add_camera_metadata(struct json_object *jobj,
 	vmeta_json_add_double(jobj_camera, "awb_b_gain", camera->awb_b_gain);
 	vmeta_json_add_double(jobj_camera, "hfov", camera->hfov);
 	vmeta_json_add_double(jobj_camera, "vfov", camera->vfov);
+	vmeta_json_add_double(jobj_camera, "zoom_level", camera->zoom_level);
+	if (spectrum)
+		vmeta_json_add_str(jobj_camera, "spectrum", spectrum->name);
+	if (subtype)
+		vmeta_json_add_str(jobj_camera, "subtype", subtype->name);
 
 	json_object_object_add(jobj, name, jobj_camera);
 }
@@ -523,6 +541,7 @@ void vmeta_json_proto_add_thermal_metadata(
 	vmeta_json_proto_add_thermal_spot(jobj_thermal, "max", thermal->max);
 	vmeta_json_proto_add_thermal_spot(
 		jobj_thermal, "probe", thermal->probe);
+	vmeta_json_proto_add_thermal_mask(jobj_thermal, "mask", thermal->mask);
 	json_object_object_add(jobj, name, jobj_thermal);
 }
 
@@ -540,10 +559,23 @@ void vmeta_json_proto_add_lfic_metadata(struct json_object *jobj,
 	jobj_lfic = json_object_new_object();
 	vmeta_json_add_double(jobj_lfic, "x", lfic->x);
 	vmeta_json_add_double(jobj_lfic, "y", lfic->y);
-	vmeta_json_proto_add_location(jobj_lfic, "location", lfic->location);
+	if (lfic->location != NULL) {
+		vmeta_json_proto_add_location(
+			jobj_lfic, "location", lfic->location);
+	}
 	vmeta_json_add_double(
 		jobj_lfic, "grid_precision", lfic->grid_precision);
-	json_object_object_add(jobj, name, jobj_lfic);
+	vmeta_json_add_str(
+		jobj_lfic,
+		"type",
+		vmeta_lfic_type_str(
+			vmeta_frame_lfic_type_proto_to_vmeta(lfic->type)));
+	if (json_object_get_type(jobj) == json_type_object)
+		json_object_object_add(jobj, name, jobj_lfic);
+	else if (json_object_get_type(jobj) == json_type_array)
+		json_object_array_add(jobj, jobj_lfic);
+	else
+		free(jobj_lfic);
 }
 
 
@@ -561,5 +593,25 @@ void vmeta_json_proto_add_thermal_spot(struct json_object *jobj,
 	vmeta_json_add_double(jobj_val, "x", thermal->x);
 	vmeta_json_add_double(jobj_val, "y", thermal->y);
 	vmeta_json_add_double(jobj_val, "temp", thermal->temp);
+	vmeta_json_add_int(jobj_val, "value", thermal->value);
+	json_object_object_add(jobj, name, jobj_val);
+}
+
+
+void vmeta_json_proto_add_thermal_mask(struct json_object *jobj,
+				       const char *name,
+				       const Vmeta__Rectf *thermal)
+{
+	struct json_object *jobj_val;
+
+	if (!thermal) {
+		ULOGD("No %s info", name);
+		return;
+	}
+	jobj_val = json_object_new_object();
+	vmeta_json_add_double(jobj_val, "x", thermal->x);
+	vmeta_json_add_double(jobj_val, "y", thermal->y);
+	vmeta_json_add_double(jobj_val, "width", thermal->width);
+	vmeta_json_add_double(jobj_val, "height", thermal->height);
 	json_object_object_add(jobj, name, jobj_val);
 }

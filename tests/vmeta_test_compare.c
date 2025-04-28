@@ -44,9 +44,7 @@ void compare_vmeta_quaternion(struct vmeta_quaternion *q1,
 
 void compare_proto_quaternion(Vmeta__Quaternion *q1, Vmeta__Quaternion *q2)
 {
-	VMETA_ASSERT_BOTH_NULL_NOTNULL(q1, q2);
-	if (!q1 || !q2)
-		return;
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(q1, q2);
 
 	CU_ASSERT_EQUAL(q1->w, q2->w);
 	CU_ASSERT_EQUAL(q1->x, q2->x);
@@ -151,9 +149,7 @@ void compare_vmeta_location(struct vmeta_location *l1,
 
 void compare_proto_location(Vmeta__Location *l1, Vmeta__Location *l2)
 {
-	VMETA_ASSERT_BOTH_NULL_NOTNULL(l1, l2);
-	if (!l1 || !l2)
-		return;
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(l1, l2);
 
 	CU_ASSERT_EQUAL(l1->altitude_wgs84ellipsoid,
 			l2->altitude_wgs84ellipsoid);
@@ -243,9 +239,7 @@ void compare_vmeta_ned(struct vmeta_ned *n1, struct vmeta_ned *n2)
 
 void compare_proto_ned(Vmeta__NED *n1, Vmeta__NED *n2)
 {
-	VMETA_ASSERT_BOTH_NULL_NOTNULL(n1, n2);
-	if (!n1 || !n2)
-		return;
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(n1, n2);
 
 	CU_ASSERT_EQUAL(n1->north, n2->north);
 	CU_ASSERT_EQUAL(n1->east, n2->east);
@@ -280,9 +274,7 @@ void compare_vmeta_xy(struct vmeta_xy *v1, struct vmeta_xy *v2)
 
 void compare_proto_vector2(Vmeta__Vector2 *v1, Vmeta__Vector2 *v2)
 {
-	VMETA_ASSERT_BOTH_NULL_NOTNULL(v1, v2);
-	if (!v1 || !v2)
-		return;
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(v1, v2);
 
 	CU_ASSERT_EQUAL(v1->x, v2->x);
 	CU_ASSERT_EQUAL(v1->y, v2->y);
@@ -303,9 +295,7 @@ void compare_vmeta_proto_xy(struct vmeta_xy *v1, Vmeta__Vector2 *v2)
 
 void compare_proto_vector3(Vmeta__Vector3 *v1, Vmeta__Vector3 *v2)
 {
-	VMETA_ASSERT_BOTH_NULL_NOTNULL(v1, v2);
-	if (!v1 || !v2)
-		return;
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(v1, v2);
 
 	CU_ASSERT_EQUAL(v1->x, v2->x);
 	CU_ASSERT_EQUAL(v1->y, v2->y);
@@ -328,18 +318,29 @@ void compare_vmeta_thermal_spot(struct vmeta_thermal_spot *t1,
 	CU_ASSERT_DOUBLE_EQUAL(t1->x, t2->x, granularity(5));
 	CU_ASSERT_DOUBLE_EQUAL(t1->y, t2->y, granularity(5));
 	CU_ASSERT_DOUBLE_EQUAL(t1->temp, t2->temp, granularity(5));
+	CU_ASSERT_EQUAL(t1->value, t2->value);
 }
 
 
 void compare_proto_thermal_spot(Vmeta__ThermalSpot *t1, Vmeta__ThermalSpot *t2)
 {
-	VMETA_ASSERT_BOTH_NULL_NOTNULL(t1, t2);
-	if (!t1 || !t2)
-		return;
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(t1, t2);
 
 	CU_ASSERT_EQUAL(t1->x, t2->x);
 	CU_ASSERT_EQUAL(t1->y, t2->y);
 	CU_ASSERT_EQUAL(t1->temp, t2->temp);
+	CU_ASSERT_EQUAL(t1->value, t2->value);
+}
+
+
+void compare_proto_rectf(Vmeta__Rectf *r1, Vmeta__Rectf *r2)
+{
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(r1, r2);
+
+	CU_ASSERT_EQUAL(r1->x, r2->x);
+	CU_ASSERT_EQUAL(r1->y, r2->y);
+	CU_ASSERT_EQUAL(r1->width, r2->width);
+	CU_ASSERT_EQUAL(r1->height, r2->height);
 }
 
 
@@ -362,14 +363,13 @@ void compare_vmeta_proto_thermal_spot(struct vmeta_thermal_spot *t1,
 	CU_ASSERT_DOUBLE_EQUAL(t1->x, t2->x, granularity(5));
 	CU_ASSERT_DOUBLE_EQUAL(t1->y, t2->y, granularity(5));
 	CU_ASSERT_DOUBLE_EQUAL(t1->temp, t2->temp, granularity(5));
+	CU_ASSERT_EQUAL(t1->value, t2->value);
 }
 
 
 void compare_proto_bounding_box(Vmeta__BoundingBox *b1, Vmeta__BoundingBox *b2)
 {
-	VMETA_ASSERT_BOTH_NULL_NOTNULL(b1, b2);
-	if (!b1 || !b2)
-		return;
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(b1, b2);
 
 	CU_ASSERT_EQUAL(b1->object_class, b2->object_class);
 	CU_ASSERT_EQUAL(b1->confidence, b2->confidence);
@@ -423,6 +423,182 @@ void compare_thermal_calib_state(enum vmeta_thermal_calib_state t1,
 }
 
 
+void compare_vmeta_proto_thermal(const struct vmeta_thermal *t1,
+				 const Vmeta__ThermalSessionMetadata *t2)
+{
+	VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(t1, t2);
+
+	CU_ASSERT_EQUAL(t1->metaversion, t2->metaversion);
+	CU_ASSERT_STRING_EQUAL(t1->camserial, t2->camera_serial_number);
+
+	compare_vmeta_proto_thermal_alignment(&t1->alignment, t2->alignment);
+	compare_vmeta_proto_thermal_conversion(&t1->conv_low, t2->conv_low);
+	compare_vmeta_proto_thermal_conversion(&t1->conv_high, t2->conv_high);
+
+	CU_ASSERT_DOUBLE_EQUAL(
+		t1->scale_factor, t2->scale_factor, granularity(5));
+}
+
+
+void compare_vmeta_proto_thermal_alignment(
+	const struct vmeta_thermal_alignment *t1,
+	const Vmeta__ThermalAlignment *t2)
+{
+	CU_ASSERT_PTR_NOT_NULL(t1);
+	if (!t1)
+		return;
+
+	if (t1->valid) {
+		/* Keep braces due to CU_ASSERT_xxx macros */
+		CU_ASSERT_PTR_NOT_NULL(t2);
+	} else {
+		CU_ASSERT_PTR_NULL(t2);
+	}
+	if (!t2)
+		return;
+
+	CU_ASSERT_DOUBLE_EQUAL(
+		t1->rotation.yaw, t2->rotation->yaw, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(
+		t1->rotation.pitch, t2->rotation->pitch, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(
+		t1->rotation.roll, t2->rotation->roll, granularity(5));
+}
+
+
+void compare_vmeta_proto_thermal_conversion(
+	const struct vmeta_thermal_conversion *t1,
+	const Vmeta__ThermalConversion *t2)
+{
+	CU_ASSERT_PTR_NOT_NULL(t1);
+	if (!t1)
+		return;
+
+	if (t1->valid) {
+		/* Keep braces due to CU_ASSERT_xxx macros */
+		CU_ASSERT_PTR_NOT_NULL(t2);
+	} else {
+		CU_ASSERT_PTR_NULL(t2);
+	}
+	if (!t2)
+		return;
+
+	CU_ASSERT_DOUBLE_EQUAL(t1->r, t2->r, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(t1->b, t2->b, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(t1->f, t2->f, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(t1->o, t2->o, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(t1->tau_win, t2->tau_win, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(t1->t_win, t2->t_win, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(t1->t_bg, t2->t_bg, granularity(5));
+	CU_ASSERT_DOUBLE_EQUAL(t1->emissivity, t2->emissivity, granularity(5));
+}
+
+
+void compare_vmeta_proto_camera_model(const struct vmeta_camera_model *t1,
+				      const Vmeta__CameraModel *t2)
+{
+	CU_ASSERT_PTR_NOT_NULL(t1);
+	if (!t1)
+		return;
+
+	switch (t1->type) {
+	case VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE:
+		CU_ASSERT_EQUAL(t2->id_case,
+				VMETA__CAMERA_MODEL__ID_PERSPECTIVE);
+		CU_ASSERT_PTR_NOT_NULL(t2->perspective);
+		CU_ASSERT_PTR_NOT_NULL(t2->perspective->distorsion);
+		CU_ASSERT_DOUBLE_EQUAL(t1->perspective.distortion.r1,
+				       t2->perspective->distorsion->r1,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->perspective.distortion.r2,
+				       t2->perspective->distorsion->r2,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->perspective.distortion.r3,
+				       t2->perspective->distorsion->r3,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->perspective.distortion.t1,
+				       t2->perspective->distorsion->t1,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->perspective.distortion.t2,
+				       t2->perspective->distorsion->t2,
+				       granularity(5));
+		break;
+	case VMETA_CAMERA_MODEL_TYPE_FISHEYE:
+		CU_ASSERT_EQUAL(t2->id_case, VMETA__CAMERA_MODEL__ID_FISHEYE);
+		CU_ASSERT_PTR_NOT_NULL(t2->fisheye);
+		CU_ASSERT_PTR_NOT_NULL(t2->fisheye->affine_matrix);
+		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.affine_matrix.c,
+				       t2->fisheye->affine_matrix->c,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.affine_matrix.d,
+				       t2->fisheye->affine_matrix->d,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.affine_matrix.e,
+				       t2->fisheye->affine_matrix->e,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.affine_matrix.f,
+				       t2->fisheye->affine_matrix->f,
+				       granularity(5));
+		CU_ASSERT_PTR_NOT_NULL(t2->fisheye->polynomial);
+		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.polynomial.p2,
+				       t2->fisheye->polynomial->p2,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.polynomial.p3,
+				       t2->fisheye->polynomial->p3,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.polynomial.p4,
+				       t2->fisheye->polynomial->p4,
+				       granularity(5));
+		break;
+	default:
+		CU_ASSERT_PTR_NULL(t2);
+		break;
+	}
+}
+
+
+void compare_vmeta_proto_overlay(const struct vmeta_overlay *t1,
+				 const Vmeta__Overlay *t2)
+{
+	CU_ASSERT_PTR_NOT_NULL(t1);
+	if (!t1)
+		return;
+
+	switch (t1->type) {
+	case VMETA_OVERLAY_TYPE_NONE:
+		CU_ASSERT_PTR_NULL(t2);
+		break;
+	case VMETA_OVERLAY_TYPE_HEADER_FOOTER:
+		CU_ASSERT_EQUAL(t2->id_case, VMETA__OVERLAY__ID_HEADER_FOOTER);
+		CU_ASSERT_DOUBLE_EQUAL(t1->header_footer.header_height,
+				       t2->header_footer->header_height,
+				       granularity(5));
+		CU_ASSERT_DOUBLE_EQUAL(t1->header_footer.footer_height,
+				       t2->header_footer->footer_height,
+				       granularity(5));
+		break;
+	default:
+		CU_ASSERT_PTR_NULL(t2);
+		break;
+	}
+}
+
+
+static void compare_vmeta_rectf_bounding(const struct vmeta_rectf *rect,
+					 const Vmeta__BoundingBox *box)
+{
+	CU_ASSERT_PTR_NOT_NULL(rect);
+	CU_ASSERT_PTR_NOT_NULL(box);
+	if (!rect || !box)
+		return;
+
+	CU_ASSERT_DOUBLE_EQUAL(rect->left, box->x, granularity(8));
+	CU_ASSERT_DOUBLE_EQUAL(rect->top, box->y, granularity(8));
+	CU_ASSERT_DOUBLE_EQUAL(rect->width, box->width, granularity(8));
+	CU_ASSERT_DOUBLE_EQUAL(rect->height, box->height, granularity(8));
+}
+
+
 void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 {
 	int err1, err2;
@@ -440,6 +616,7 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 	int8_t i8_1, i8_2;
 	enum vmeta_flying_state s1, s2;
 	enum vmeta_piloting_mode m1, m2;
+	struct vmeta_rectf r1, r2;
 
 	CU_ASSERT_PTR_NOT_NULL(f1);
 	CU_ASSERT_PTR_NOT_NULL(f2);
@@ -474,6 +651,12 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 	if (err1 == 0 && err2 == 0)
 		CU_ASSERT_DOUBLE_EQUAL(d1, d2, granularity(16));
 
+	err1 = vmeta_frame_get_altitude_above_takeoff(f1, &d1);
+	err2 = vmeta_frame_get_altitude_above_takeoff(f2, &d2);
+	CU_ASSERT_EQUAL(err1, err2);
+	if (err1 == 0 && err2 == 0)
+		CU_ASSERT_DOUBLE_EQUAL(d1, d2, granularity(16));
+
 	err1 = vmeta_frame_get_drone_euler(f1, &eul1);
 	err2 = vmeta_frame_get_drone_euler(f2, &eul2);
 	CU_ASSERT_EQUAL(err1, err2);
@@ -494,6 +677,12 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 
 	err1 = vmeta_frame_get_frame_quat(f1, &q1);
 	err2 = vmeta_frame_get_frame_quat(f2, &q2);
+	CU_ASSERT_EQUAL(err1, err2);
+	if (err1 == 0 && err2 == 0)
+		compare_vmeta_quaternion(&q1, &q2);
+
+	err1 = vmeta_frame_get_frame_local_quat(f1, &q1);
+	err2 = vmeta_frame_get_frame_local_quat(f2, &q2);
 	CU_ASSERT_EQUAL(err1, err2);
 	if (err1 == 0 && err2 == 0)
 		compare_vmeta_quaternion(&q1, &q2);
@@ -576,6 +765,12 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 	if (err1 == 0 && err2 == 0)
 		CU_ASSERT_DOUBLE_EQUAL(fl1, fl2, granularity(8));
 
+	err1 = vmeta_frame_get_camera_zoom_level(f1, &fl1);
+	err2 = vmeta_frame_get_camera_zoom_level(f2, &fl2);
+	CU_ASSERT_EQUAL(err1, err2);
+	if (err1 == 0 && err2 == 0)
+		CU_ASSERT_DOUBLE_EQUAL(fl1, fl2, granularity(16));
+
 	err1 = vmeta_frame_get_link_goodput(f1, &u32_1);
 	err2 = vmeta_frame_get_link_goodput(f2, &u32_2);
 	CU_ASSERT_EQUAL(err1, err2);
@@ -611,6 +806,12 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 	CU_ASSERT_EQUAL(err1, err2);
 	if (err1 == 0 && err2 == 0)
 		CU_ASSERT_EQUAL(m1, m2);
+
+	err1 = vmeta_frame_get_tracking_box(f1, &r1);
+	err2 = vmeta_frame_get_tracking_box(f2, &r2);
+	CU_ASSERT_EQUAL(err1, err2);
+	if (err1 == 0 && err2 == 0)
+		CU_ASSERT_EQUAL(memcmp(&r1, &r2, sizeof(r1)), 0);
 }
 
 
@@ -821,7 +1022,7 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 	enum vmeta_flying_state state;
 	enum vmeta_piloting_mode mode;
 	const Vmeta__TimedMetadata *proto;
-	size_t index;
+	struct vmeta_rectf rect;
 
 	CU_ASSERT_PTR_NOT_NULL(f);
 	if (!f)
@@ -859,6 +1060,13 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 	if (err == 0)
 		CU_ASSERT_DOUBLE_EQUAL(
 			d, proto->drone->ground_distance, granularity(16));
+
+	err = vmeta_frame_get_altitude_above_takeoff(f, &d);
+	expected = proto->drone ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		CU_ASSERT_DOUBLE_EQUAL(
+			d, proto->drone->altitude_ato, granularity(16));
 
 	err = vmeta_frame_get_drone_euler(f, &eul);
 	expected = (proto->drone && proto->drone->quat) ? 0 : -ENOENT;
@@ -901,6 +1109,12 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 	CU_ASSERT_EQUAL(err, expected);
 	if (err == 0)
 		compare_vmeta_proto_quaternion(&q, proto->camera->quat);
+
+	err = vmeta_frame_get_frame_local_quat(f, &q);
+	expected = (proto->camera && proto->camera->local_quat) ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		compare_vmeta_proto_quaternion(&q, proto->camera->local_quat);
 
 	err = vmeta_frame_get_frame_base_euler(f, &eul);
 	expected = (proto->camera && proto->camera->base_quat) ? 0 : -ENOENT;
@@ -992,44 +1206,59 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 		CU_ASSERT_DOUBLE_EQUAL(
 			fl, proto->camera->vfov * 180. / M_PI, granularity(8));
 
+	err = vmeta_frame_get_camera_zoom_level(f, &fl);
+	expected = proto->camera ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		CU_ASSERT_DOUBLE_EQUAL(
+			fl, proto->camera->zoom_level, granularity(16));
+
 	err = vmeta_frame_get_link_goodput(f, &u32);
 	expected = -ENOENT;
-	for (index = 0; index < proto->n_links; index++) {
-		if (proto->links[index]->protocol_case ==
-		    VMETA__LINK_METADATA__PROTOCOL_WIFI) {
-			expected = 0;
-			break;
-		}
+	if (proto->n_links > 1) {
+		expected = -EPROTO;
+	} else if (proto->n_links == 1 &&
+		   proto->links[0]->protocol_case ==
+			   VMETA__LINK_METADATA__PROTOCOL_WIFI) {
+		expected = 0;
 	}
 	CU_ASSERT_EQUAL(err, expected);
 	if (err == 0)
-		CU_ASSERT_EQUAL(u32, proto->links[index]->wifi->goodput);
+		CU_ASSERT_EQUAL(u32, proto->links[0]->wifi->goodput);
 
 	err = vmeta_frame_get_link_quality(f, &u8);
 	expected = -ENOENT;
-	for (index = 0; index < proto->n_links; index++) {
-		if (proto->links[index]->protocol_case ==
-		    VMETA__LINK_METADATA__PROTOCOL_WIFI) {
-			expected = 0;
-			break;
-		}
+	if (proto->n_links > 1) {
+		expected = -EPROTO;
+	} else if (proto->n_links == 1 &&
+		   (proto->links[0]->protocol_case ==
+			    VMETA__LINK_METADATA__PROTOCOL_WIFI ||
+		    proto->links[0]->protocol_case ==
+			    VMETA__LINK_METADATA__PROTOCOL_STARFISH)) {
+		expected = 0;
 	}
 	CU_ASSERT_EQUAL(err, expected);
-	if (err == 0)
-		CU_ASSERT_EQUAL(u8, proto->links[index]->wifi->quality);
+	if (err == 0) {
+		if (proto->links[0]->protocol_case ==
+		    VMETA__LINK_METADATA__PROTOCOL_WIFI)
+			CU_ASSERT_EQUAL(u8, proto->links[0]->wifi->quality);
+		if (proto->links[0]->protocol_case ==
+		    VMETA__LINK_METADATA__PROTOCOL_STARFISH)
+			CU_ASSERT_EQUAL(u8, proto->links[0]->starfish->quality);
+	}
 
 	err = vmeta_frame_get_wifi_rssi(f, &i8);
 	expected = -ENOENT;
-	for (index = 0; index < proto->n_links; index++) {
-		if (proto->links[index]->protocol_case ==
-		    VMETA__LINK_METADATA__PROTOCOL_WIFI) {
-			expected = 0;
-			break;
-		}
+	if (proto->n_links > 1) {
+		expected = -EPROTO;
+	} else if (proto->n_links == 1 &&
+		   proto->links[0]->protocol_case ==
+			   VMETA__LINK_METADATA__PROTOCOL_WIFI) {
+		expected = 0;
 	}
 	CU_ASSERT_EQUAL(err, expected);
 	if (err == 0)
-		CU_ASSERT_EQUAL(i8, proto->links[index]->wifi->rssi);
+		CU_ASSERT_EQUAL(i8, proto->links[0]->wifi->rssi);
 
 	err = vmeta_frame_get_battery_percentage(f, &u8);
 	expected = proto->drone ? 0 : -ENOENT;
@@ -1048,6 +1277,12 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 	CU_ASSERT_EQUAL(err, expected);
 	if (err == 0)
 		compare_piloting_mode(mode, proto->drone->piloting_mode);
+
+	err = vmeta_frame_get_tracking_box(f, &rect);
+	expected = (proto->tracking && proto->tracking->target) ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		compare_vmeta_rectf_bounding(&rect, proto->tracking->target);
 
 	vmeta_frame_proto_release_unpacked(f, proto);
 }

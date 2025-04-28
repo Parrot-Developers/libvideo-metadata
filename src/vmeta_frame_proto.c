@@ -150,9 +150,16 @@ int vmeta_frame_proto_read(struct vmeta_buffer *buf,
 	int res;
 	size_t alloc_len;
 	struct vmeta_frame_proto *l_meta;
+	uint64_t empty_cookie = VMETA_FRAME_PROTO_EMPTY_COOKIE;
 
 	ULOG_ERRNO_RETURN_ERR_IF(!buf, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(!meta, EINVAL);
+
+	/* Handle empty sample */
+	if ((buf->len == sizeof(empty_cookie)) &&
+	    (memcmp(buf->cdata, &empty_cookie, sizeof(empty_cookie)) == 0)) {
+		return -ENODATA;
+	}
 
 	res = vmeta_frame_proto_alloc(&l_meta);
 	if (res != 0)
@@ -211,7 +218,7 @@ int vmeta_frame_proto_to_json(struct vmeta_frame *meta,
 			      struct json_object *jobj)
 {
 	int ret = 0;
-	Vmeta__TimedMetadata *timed_meta;
+	Vmeta__TimedMetadata *timed_meta = NULL;
 
 	ret = vmeta_frame_proto_get_unpacked(
 		meta, (const Vmeta__TimedMetadata **)&timed_meta);
@@ -224,6 +231,7 @@ int vmeta_frame_proto_to_json(struct vmeta_frame *meta,
 		ULOG_ERRNO("vmeta_json_add_proto_timed_metadata", -ret);
 		goto error;
 	}
+
 error:
 	ret = vmeta_frame_proto_release_unpacked(meta, timed_meta);
 	if (ret < 0)
@@ -304,13 +312,13 @@ int vmeta_frame_proto_release_unpacked(struct vmeta_frame *meta,
 	pthread_mutex_lock(&meta->proto->lock);
 
 	if (!meta->proto->ru_lock) {
-		ULOGW("%s called with no unpacked-read-lock held", __func__);
+		ULOGE("%s called with no unpacked-read-lock held", __func__);
 		ret = -EPROTO;
 		goto out;
 	}
 
 	if (!meta->proto->unpacked || proto_meta != meta->proto->meta) {
-		ULOGW("%s called with a wrong proto_meta", __func__);
+		ULOGE("%s called with a wrong proto_meta", __func__);
 		ret = -EPROTO;
 		goto out;
 	}
@@ -369,13 +377,13 @@ int vmeta_frame_proto_release_unpacked_rw(struct vmeta_frame *meta,
 	pthread_mutex_lock(&meta->proto->lock);
 
 	if (!meta->proto->w_lock) {
-		ULOGW("%s called with no write-lock held", __func__);
+		ULOGE("%s called with no write-lock held", __func__);
 		ret = -EPROTO;
 		goto out;
 	}
 
 	if (!meta->proto->unpacked || proto_meta != meta->proto->meta) {
-		ULOGW("%s called with a wrong proto_meta", __func__);
+		ULOGE("%s called with a wrong proto_meta", __func__);
 		ret = -EPROTO;
 		goto out;
 	}
@@ -443,13 +451,13 @@ int vmeta_frame_proto_release_buffer(struct vmeta_frame *meta,
 	pthread_mutex_lock(&meta->proto->lock);
 
 	if (!meta->proto->rp_lock) {
-		ULOGW("%s called with no packed-read-lock held", __func__);
+		ULOGE("%s called with no packed-read-lock held", __func__);
 		ret = -EPROTO;
 		goto out;
 	}
 
 	if (!meta->proto->packed || buf != meta->proto->buf) {
-		ULOGW("%s called with a wrong buffer", __func__);
+		ULOGE("%s called with a wrong buffer", __func__);
 		ret = -EPROTO;
 		goto out;
 	}
@@ -520,6 +528,26 @@ vmeta_frame_proto_get_camera_quat(Vmeta__CameraMetadata *camera)
 	vmeta__quaternion__init(quat);
 	camera->quat = quat;
 	return quat;
+}
+
+
+Vmeta__Quaternion *
+vmeta_frame_proto_get_camera_local_quat(Vmeta__CameraMetadata *camera)
+{
+	Vmeta__Quaternion *local_quat;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!camera, EINVAL, NULL);
+
+	if (camera->local_quat)
+		return camera->local_quat;
+	local_quat = calloc(1, sizeof(*local_quat));
+	if (!local_quat) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__quaternion__init(local_quat);
+	camera->local_quat = local_quat;
+	return local_quat;
 }
 
 
@@ -1033,14 +1061,45 @@ vmeta_frame_proto_get_thermal_probe(Vmeta__ThermalMetadata *thermal)
 }
 
 
-Vmeta__LFICMetadata *vmeta_frame_proto_get_lfic(Vmeta__TimedMetadata *meta)
+Vmeta__Rectf *
+vmeta_frame_proto_get_thermal_mask(Vmeta__ThermalMetadata *thermal)
 {
-	Vmeta__LFICMetadata *lfic;
+	Vmeta__Rectf *mask;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!thermal, EINVAL, NULL);
+
+	if (thermal->mask)
+		return thermal->mask;
+	mask = calloc(1, sizeof(*mask));
+	if (!mask) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__rectf__init(mask);
+	thermal->mask = mask;
+	return mask;
+}
+
+
+Vmeta__LFICMetadata *
+vmeta_frame_proto_get_lfic_by_index(Vmeta__TimedMetadata *meta, size_t index)
+{
+	Vmeta__LFICMetadata *lfic, **tmp;
 
 	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
+	ULOG_ERRNO_RETURN_VAL_IF(index > meta->n_lfic, EINVAL, NULL);
 
-	if (meta->lfic)
-		return meta->lfic;
+	if (!meta->lfic) {
+		meta->lfic = calloc(1, sizeof(*meta->lfic));
+		if (!meta->lfic) {
+			ULOG_ERRNO("calloc", ENOMEM);
+			return NULL;
+		}
+		meta->n_lfic = 0;
+	}
+
+	if (meta->n_lfic > index)
+		return meta->lfic[index];
 
 	lfic = calloc(1, sizeof(*lfic));
 	if (!lfic) {
@@ -1048,7 +1107,16 @@ Vmeta__LFICMetadata *vmeta_frame_proto_get_lfic(Vmeta__TimedMetadata *meta)
 		return NULL;
 	}
 	vmeta__lficmetadata__init(lfic);
-	meta->lfic = lfic;
+
+	tmp = realloc(meta->lfic, (index + 1) * sizeof(lfic));
+	if (!tmp) {
+		vmeta__lficmetadata__free_unpacked(lfic, NULL);
+		return NULL;
+	}
+	meta->n_lfic = index + 1;
+	meta->lfic = tmp;
+	meta->lfic[index] = lfic;
+
 	return lfic;
 }
 
@@ -1171,6 +1239,41 @@ vmeta_frame_flying_state_vmeta_to_proto(enum vmeta_flying_state state)
 	}
 	return out;
 }
+
+
+enum vmeta_lfic_type vmeta_frame_lfic_type_proto_to_vmeta(Vmeta__LficType type)
+{
+	enum vmeta_lfic_type out = VMETA_LFIC_TYPE_COT;
+	switch (type) {
+	case VMETA__LFIC_TYPE__LFIC_TYPE_COT:
+		out = VMETA_LFIC_TYPE_COT;
+		break;
+	case VMETA__LFIC_TYPE__LFIC_TYPE_USER:
+		out = VMETA_LFIC_TYPE_USER;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+Vmeta__LficType vmeta_frame_lfic_type_vmeta_to_proto(enum vmeta_lfic_type type)
+{
+	Vmeta__LficType out = VMETA__LFIC_TYPE__LFIC_TYPE_COT;
+	switch (type) {
+	case VMETA_LFIC_TYPE_COT:
+		out = VMETA__LFIC_TYPE__LFIC_TYPE_COT;
+		break;
+	case VMETA_LFIC_TYPE_USER:
+		out = VMETA__LFIC_TYPE__LFIC_TYPE_USER;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
 
 enum vmeta_piloting_mode
 vmeta_frame_piloting_mode_proto_to_vmeta(Vmeta__PilotingMode mode)
@@ -1393,6 +1496,48 @@ Vmeta__ThermalCalibrationState vmeta_frame_thermal_calib_state_vmeta_to_proto(
 		break;
 	case VMETA_THERMAL_CALIB_STATE_IN_PROGRESS:
 		out = VMETA__THERMAL_CALIBRATION_STATE__TCS_IN_PROGRESS;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+VMETA_API enum vmeta_camera_spectrum
+vmeta_frame_camera_spectrum_proto_to_vmeta(Vmeta__CameraSpectrum spectrum)
+{
+	enum vmeta_camera_spectrum out = VMETA_CAMERA_SPECTRUM_UNKNOWN;
+	switch (spectrum) {
+	case VMETA__CAMERA_SPECTRUM__CS_VISIBLE:
+		out = VMETA_CAMERA_SPECTRUM_VISIBLE;
+		break;
+	case VMETA__CAMERA_SPECTRUM__CS_BLENDED:
+		out = VMETA_CAMERA_SPECTRUM_BLENDED;
+		break;
+	case VMETA__CAMERA_SPECTRUM__CS_THERMAL:
+		out = VMETA_CAMERA_SPECTRUM_THERMAL;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+VMETA_API Vmeta__CameraSpectrum
+vmeta_frame_camera_spectrum_vmeta_to_proto(enum vmeta_camera_spectrum spectrum)
+{
+	Vmeta__CameraSpectrum out = VMETA__CAMERA_SPECTRUM__CS_UNKNOWN;
+	switch (spectrum) {
+	case VMETA_CAMERA_SPECTRUM_VISIBLE:
+		out = VMETA__CAMERA_SPECTRUM__CS_VISIBLE;
+		break;
+	case VMETA_CAMERA_SPECTRUM_BLENDED:
+		out = VMETA__CAMERA_SPECTRUM__CS_BLENDED;
+		break;
+	case VMETA_CAMERA_SPECTRUM_THERMAL:
+		out = VMETA__CAMERA_SPECTRUM__CS_THERMAL;
 		break;
 	default:
 		break;

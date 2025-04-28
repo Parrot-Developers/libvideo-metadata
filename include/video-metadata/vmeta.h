@@ -61,6 +61,9 @@ enum vmeta_camera_type {
 	/* Front camera */
 	VMETA_CAMERA_TYPE_FRONT,
 
+	/* Front stereo camera */
+	VMETA_CAMERA_TYPE_FRONT_STEREO,
+
 	/* Front stereo left camera */
 	VMETA_CAMERA_TYPE_FRONT_STEREO_LEFT,
 
@@ -72,6 +75,68 @@ enum vmeta_camera_type {
 
 	/* Disparity map */
 	VMETA_CAMERA_TYPE_DISPARITY,
+
+	/* Horizontal stereo camera */
+	VMETA_CAMERA_TYPE_HORIZONTAL_STEREO,
+
+	/* Horizontal stereo left camera */
+	VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_LEFT,
+
+	/* Horizontal stereo right camera */
+	VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_RIGHT,
+
+	/* Down stereo camera */
+	VMETA_CAMERA_TYPE_DOWN_STEREO,
+
+	/* Down stereo left camera */
+	VMETA_CAMERA_TYPE_DOWN_STEREO_LEFT,
+
+	/* Down stereo right camera */
+	VMETA_CAMERA_TYPE_DOWN_STEREO_RIGHT,
+
+	/* External camera */
+	VMETA_CAMERA_TYPE_EXTERNAL,
+};
+
+
+/* Camera subtype */
+enum vmeta_camera_subtype {
+	/* Unknown camera subtype */
+	VMETA_CAMERA_SUBTYPE_UNKNOWN = 0,
+
+	/* Left camera */
+	VMETA_CAMERA_SUBTYPE_LEFT,
+
+	/* Right camera */
+	VMETA_CAMERA_SUBTYPE_RIGHT,
+
+	/* Wide camera */
+	VMETA_CAMERA_SUBTYPE_WIDE,
+
+	/* Tele camera */
+	VMETA_CAMERA_SUBTYPE_TELE,
+
+	/* Disparity map camera */
+	VMETA_CAMERA_SUBTYPE_DISPARITY,
+
+	/* Depth map camera */
+	VMETA_CAMERA_SUBTYPE_DEPTH,
+};
+
+
+/* Camera spectrum */
+enum vmeta_camera_spectrum {
+	/* Unknown spectrum */
+	VMETA_CAMERA_SPECTRUM_UNKNOWN = 0,
+
+	/* Visible spectrum */
+	VMETA_CAMERA_SPECTRUM_VISIBLE,
+
+	/* Thermal spectrum */
+	VMETA_CAMERA_SPECTRUM_THERMAL,
+
+	/* Blended spectrum */
+	VMETA_CAMERA_SPECTRUM_BLENDED,
 };
 
 
@@ -88,6 +153,16 @@ enum vmeta_camera_model_type {
 };
 
 
+/* Overlay type */
+enum vmeta_overlay_type {
+	/* No overlay */
+	VMETA_OVERLAY_TYPE_NONE = 0,
+
+	/* Header-Footer overlay type */
+	VMETA_OVERLAY_TYPE_HEADER_FOOTER,
+};
+
+
 /* Video mode */
 enum vmeta_video_mode {
 	/* Unknown video mode */
@@ -101,6 +176,9 @@ enum vmeta_video_mode {
 
 	/* Slow motion video mode */
 	VMETA_VIDEO_MODE_SLOWMOTION,
+
+	/* Stream recording video mode */
+	VMETA_VIDEO_MODE_STREAMREC,
 };
 
 
@@ -274,6 +352,15 @@ struct vmeta_ned {
 };
 
 
+/* rectangle (float) */
+struct vmeta_rectf {
+	float left;
+	float top;
+	float width;
+	float height;
+};
+
+
 /* Field of view */
 /* clang-format off */
 struct vmeta_fov {
@@ -296,16 +383,19 @@ struct vmeta_fov {
 /* clang-format off */
 struct vmeta_thermal_spot {
 	/* Position x; Normalized relative to the frame width; [0:1]
-	 * where 0 is the left frame border */
+	 * where 0 is the left frame border (-1 means unknown) */
 	float x;
 
 	/* Position y; Normalized relative to the frame height; [0:1]
-	 * where 0 is the top frame border */
+	 * where 0 is the top frame border (-1 means unknown) */
 	float y;
 
-	/* Temperature in kelvin or in raw sensor signal unit in case of
-	 * non-radiometric sensor */
+	/* Temperature in kelvin for radiometric sensor (-1 means unknown) */
 	float temp;
+
+	/* Temperature in raw sensor signal unit (unsigned 16-bit value;
+	 * -1 means unknown) */
+	int32_t value;
 
 	/* Validity flag (1 if the structure contents are valid, 0 otherwise) */
 	uint8_t valid;
@@ -386,6 +476,48 @@ VMETA_API const char *vmeta_camera_type_to_str(enum vmeta_camera_type val);
 
 
 /**
+ * Get an enum vmeta_camera_subtype value from a string.
+ * Valid strings are only the suffix of the camera subtype (eg. 'LEFT').
+ * The case is ignored.
+ * @param str: camera subtype string to convert
+ * @return the enum vmeta_camera_subtype value or
+ * VMETA_CAMERA_SUBTYPE_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_camera_subtype
+vmeta_camera_subtype_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_camera_subtype value.
+ * @param val: camera subtype value to convert
+ * @return a string description of the camera subtype
+ */
+VMETA_API const char *
+vmeta_camera_subtype_to_str(enum vmeta_camera_subtype val);
+
+
+/**
+ * Get an enum vmeta_camera_spectrum value from a string.
+ * Valid strings are only the suffix of the camera spectrum (eg. 'VISIBLE').
+ * The case is ignored.
+ * @param str: camera spectrum string to convert
+ * @return the enum vmeta_camera_spectrum value or
+ * VMETA_CAMERA_SPECTRUM_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_camera_spectrum
+vmeta_camera_spectrum_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_camera_spectrum value.
+ * @param val: camera spectrum value to convert
+ * @return a string description of the camera spectrum
+ */
+VMETA_API const char *
+vmeta_camera_spectrum_to_str(enum vmeta_camera_spectrum val);
+
+
+/**
  * Get an enum vmeta_camera_model_type value from a string.
  * Valid strings are only the suffix of the camera model type (eg. 'FISHEYE').
  * The case is ignored.
@@ -404,6 +536,14 @@ vmeta_camera_model_type_from_str(const char *str);
  */
 VMETA_API const char *
 vmeta_camera_model_type_to_str(enum vmeta_camera_model_type val);
+
+
+/**
+ * Get a string from an enum vmeta_overlay_type value.
+ * @param val: overlay type value to convert
+ * @return a string description of the overlay type
+ */
+VMETA_API const char *vmeta_overlay_type_to_str(enum vmeta_overlay_type val);
 
 
 /**

@@ -174,7 +174,7 @@ int vmeta_frame_get_location(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -237,7 +237,7 @@ int vmeta_frame_get_speed_ned(struct vmeta_frame *meta, struct vmeta_ned *speed)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -274,7 +274,7 @@ int vmeta_frame_get_air_speed(struct vmeta_frame *meta, float *speed)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -327,7 +327,49 @@ int vmeta_frame_get_ground_distance(struct vmeta_frame *meta, double *dist)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_altitude_above_takeoff(struct vmeta_frame *meta,
+					   double *alt)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(alt == NULL, EINVAL);
+	*alt = 0.;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->drone || isnan(tm->drone->altitude_ato)) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*alt = tm->drone->altitude_ato;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -389,7 +431,7 @@ int vmeta_frame_get_drone_euler(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -449,7 +491,7 @@ int vmeta_frame_get_drone_quat(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -511,7 +553,7 @@ int vmeta_frame_get_frame_euler(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -571,7 +613,52 @@ int vmeta_frame_get_frame_quat(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_frame_local_quat(struct vmeta_frame *meta,
+				     struct vmeta_quaternion *local_quat)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(local_quat == NULL, EINVAL);
+	memset(local_quat, 0, sizeof(*local_quat));
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || !tm->camera->local_quat) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		local_quat->w = tm->camera->local_quat->w;
+		local_quat->x = tm->camera->local_quat->x;
+		local_quat->y = tm->camera->local_quat->y;
+		local_quat->z = tm->camera->local_quat->z;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -621,7 +708,7 @@ int vmeta_frame_get_frame_base_euler(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -669,11 +756,54 @@ int vmeta_frame_get_frame_base_quat(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
 
+	return res;
+}
+
+
+int vmeta_frame_get_frame_utc_timestamp(struct vmeta_frame *meta,
+					uint64_t *timestamp)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(timestamp == NULL, EINVAL);
+	*timestamp = 0;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*timestamp = tm->camera->utc_timestamp;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	if (res == 0 && *timestamp == 0)
+		res = -ENOENT;
 	return res;
 }
 
@@ -726,7 +856,7 @@ int vmeta_frame_get_frame_timestamp(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -785,7 +915,7 @@ int vmeta_frame_get_camera_location(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -830,7 +960,7 @@ int vmeta_frame_get_camera_principal_point(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -870,7 +1000,7 @@ int vmeta_frame_get_camera_pan(struct vmeta_frame *meta, float *pan)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -910,7 +1040,7 @@ int vmeta_frame_get_camera_tilt(struct vmeta_frame *meta, float *tilt)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -966,7 +1096,7 @@ int vmeta_frame_get_exposure_time(struct vmeta_frame *meta, float *exp)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1022,7 +1152,7 @@ int vmeta_frame_get_gain(struct vmeta_frame *meta, uint16_t *gain)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1066,7 +1196,7 @@ int vmeta_frame_get_awb_r_gain(struct vmeta_frame *meta, float *gain)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1110,7 +1240,7 @@ int vmeta_frame_get_awb_b_gain(struct vmeta_frame *meta, float *gain)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1154,7 +1284,7 @@ int vmeta_frame_get_picture_h_fov(struct vmeta_frame *meta, float *fov)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1198,7 +1328,49 @@ int vmeta_frame_get_picture_v_fov(struct vmeta_frame *meta, float *fov)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_camera_zoom_level(struct vmeta_frame *meta,
+				      float *zoom_level)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(zoom_level == NULL, EINVAL);
+	*zoom_level = 0.;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera || isnan(tm->camera->zoom_level)) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*zoom_level = tm->camera->zoom_level;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1211,6 +1383,7 @@ int vmeta_frame_get_link_goodput(struct vmeta_frame *meta, uint32_t *goodput)
 {
 	int res = 0;
 	const Vmeta__TimedMetadata *tm;
+	const Vmeta__LinkMetadata *link;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(goodput == NULL, EINVAL);
 	*goodput = 0;
@@ -1237,21 +1410,26 @@ int vmeta_frame_get_link_goodput(struct vmeta_frame *meta, uint32_t *goodput)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		res = -ENOENT;
-		for (size_t i = 0; i < tm->n_links; i++) {
-			Vmeta__LinkMetadata *link = tm->links[i];
-			if (link->protocol_case !=
-			    VMETA__LINK_METADATA__PROTOCOL_WIFI)
-				continue;
-			res = 0;
-			*goodput = link->wifi->goodput;
+		if (tm->n_links > 1) {
+			/* Only take into account the first link (there
+			 * should not be more than one) */
+			res = -EPROTO;
+			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
+		link = tm->links[0];
+		if (link->protocol_case !=
+		    VMETA__LINK_METADATA__PROTOCOL_WIFI) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*goodput = link->wifi->goodput;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1264,6 +1442,7 @@ int vmeta_frame_get_link_quality(struct vmeta_frame *meta, uint8_t *quality)
 {
 	int res = 0;
 	const Vmeta__TimedMetadata *tm;
+	const Vmeta__LinkMetadata *link;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(quality == NULL, EINVAL);
 	*quality = 0;
@@ -1290,21 +1469,30 @@ int vmeta_frame_get_link_quality(struct vmeta_frame *meta, uint8_t *quality)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		res = -ENOENT;
-		for (size_t i = 0; i < tm->n_links; i++) {
-			Vmeta__LinkMetadata *link = tm->links[i];
-			if (link->protocol_case !=
-			    VMETA__LINK_METADATA__PROTOCOL_WIFI)
-				continue;
-			res = 0;
+		if (tm->n_links > 1) {
+			/* Only take into account the first link (there
+			 * should not be more than one) */
+			res = -EPROTO;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		link = tm->links[0];
+		switch (link->protocol_case) {
+		case VMETA__LINK_METADATA__PROTOCOL_WIFI:
 			*quality = link->wifi->quality;
+			break;
+		case VMETA__LINK_METADATA__PROTOCOL_STARFISH:
+			*quality = link->starfish->quality;
+			break;
+		default:
+			res = -ENOENT;
 			break;
 		}
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1317,6 +1505,7 @@ int vmeta_frame_get_wifi_rssi(struct vmeta_frame *meta, int8_t *rssi)
 {
 	int res = 0;
 	const Vmeta__TimedMetadata *tm;
+	const Vmeta__LinkMetadata *link;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(rssi == NULL, EINVAL);
 	*rssi = 0;
@@ -1355,21 +1544,26 @@ int vmeta_frame_get_wifi_rssi(struct vmeta_frame *meta, int8_t *rssi)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		res = -ENOENT;
-		for (size_t i = 0; i < tm->n_links; i++) {
-			Vmeta__LinkMetadata *link = tm->links[i];
-			if (link->protocol_case !=
-			    VMETA__LINK_METADATA__PROTOCOL_WIFI)
-				continue;
-			res = 0;
-			*rssi = link->wifi->rssi;
+		if (tm->n_links > 1) {
+			/* Only take into account the first link (there
+			 * should not be more than one) */
+			res = -EPROTO;
+			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
+		link = tm->links[0];
+		if (link->protocol_case !=
+		    VMETA__LINK_METADATA__PROTOCOL_WIFI) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*rssi = link->wifi->rssi;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1425,7 +1619,7 @@ int vmeta_frame_get_battery_percentage(struct vmeta_frame *meta, uint8_t *bat)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1480,11 +1674,383 @@ int vmeta_frame_get_flying_state(struct vmeta_frame *meta,
 		break;
 
 	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_camera_spectrum(struct vmeta_frame *meta,
+				    enum vmeta_camera_spectrum *spectrum)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(spectrum == NULL, EINVAL);
+	*spectrum = VMETA_CAMERA_SPECTRUM_UNKNOWN;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*spectrum = vmeta_frame_camera_spectrum_proto_to_vmeta(
+			tm->camera->spectrum);
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_thermal_mask(struct vmeta_frame *meta,
+				 struct vmeta_rectf *mask)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(mask == NULL, EINVAL);
+	memset(mask, 0, sizeof(*mask));
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (tm->thermal == NULL || tm->thermal->mask == NULL) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		mask->left = tm->thermal->mask->x;
+		mask->top = tm->thermal->mask->y;
+		mask->width = tm->thermal->mask->width;
+		mask->height = tm->thermal->mask->height;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_lfic(struct vmeta_frame *meta,
+			 struct vmeta_location *loc,
+			 float *x,
+			 float *y,
+			 double *estimated_precision,
+			 double *grid_precision)
+{
+	return vmeta_frame_get_lfic_by_type(meta,
+					    VMETA_LFIC_TYPE_COT,
+					    loc,
+					    x,
+					    y,
+					    estimated_precision,
+					    grid_precision);
+}
+
+
+int vmeta_frame_get_lfic_by_type(struct vmeta_frame *meta,
+				 enum vmeta_lfic_type type,
+				 struct vmeta_location *loc,
+				 float *x,
+				 float *y,
+				 double *estimated_precision,
+				 double *grid_precision)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	size_t index = 0;
+
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(x == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(y == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(estimated_precision == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(grid_precision == NULL, EINVAL);
+	memset(loc, 0, sizeof(*loc));
+	*x = 0.f;
+	*y = 0.f;
+	*estimated_precision = 0.;
+	*grid_precision = 0.;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_V3:
+		if (type != VMETA_LFIC_TYPE_COT)
+			return -ENOENT;
+		if (!meta->v3.has_lfic)
+			return -ENOENT;
+		*loc = meta->v3.lfic.target_location;
+		*x = meta->v3.lfic.target_x;
+		*y = meta->v3.lfic.target_y;
+		*estimated_precision = meta->v3.lfic.estimated_precision;
+		*grid_precision = meta->v3.lfic.grid_precision;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+
+		for (index = 0; index < tm->n_lfic; index++) {
+			if (tm->lfic[index] == NULL) {
+				index = tm->n_lfic;
+				break;
+			}
+			if (tm->lfic[index]->type ==
+			    vmeta_frame_lfic_type_vmeta_to_proto(type))
+				break;
+		}
+		if ((tm->n_lfic == 0) || (index >= tm->n_lfic)) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+
+		if (tm->lfic[index]->location != NULL) {
+			loc->altitude_wgs84ellipsoid =
+				tm->lfic[index]
+					->location->altitude_wgs84ellipsoid;
+			if (loc->altitude_wgs84ellipsoid == 0.)
+				loc->altitude_wgs84ellipsoid = NAN;
+			loc->altitude_egm96amsl =
+				tm->lfic[index]->location->altitude_egm96amsl;
+			if (loc->altitude_egm96amsl == 0.)
+				loc->altitude_egm96amsl = NAN;
+			loc->latitude = tm->lfic[index]->location->latitude;
+			loc->longitude = tm->lfic[index]->location->longitude;
+			loc->sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
+			loc->valid = 1;
+			*estimated_precision =
+				tm->lfic[index]->location->horizontal_accuracy;
+		} else {
+			loc->valid = 0;
+		}
+		*x = tm->lfic[index]->x;
+		*y = tm->lfic[index]->y;
+		*grid_precision = tm->lfic[index]->grid_precision;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
 		ULOGW("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
 
+	return res;
+}
+
+
+int vmeta_frame_get_lfic_count(struct vmeta_frame *meta, size_t *count)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(count == NULL, EINVAL);
+
+	*count = 0;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+		break;
+
+	case VMETA_FRAME_TYPE_V3:
+		if (meta->v3.has_lfic)
+			*count = 1;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		*count = tm->n_lfic;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGW("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
+				  size_t index,
+				  struct vmeta_location *loc,
+				  float *x,
+				  float *y,
+				  double *estimated_precision,
+				  double *grid_precision,
+				  enum vmeta_lfic_type *type)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(x == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(y == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(estimated_precision == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(grid_precision == NULL, EINVAL);
+	memset(loc, 0, sizeof(*loc));
+	*x = 0.f;
+	*y = 0.f;
+	*estimated_precision = 0.;
+	*grid_precision = 0.;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_V3:
+		if (index != 0 || !meta->v3.has_lfic)
+			return -ENOENT;
+		*loc = meta->v3.lfic.target_location;
+		*x = meta->v3.lfic.target_x;
+		*y = meta->v3.lfic.target_y;
+		*estimated_precision = meta->v3.lfic.estimated_precision;
+		*grid_precision = meta->v3.lfic.grid_precision;
+		*type = VMETA_LFIC_TYPE_COT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if ((tm->n_lfic <= index) || (tm->lfic[index] == NULL)) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		if (tm->lfic[index]->location != NULL) {
+			loc->altitude_wgs84ellipsoid =
+				tm->lfic[index]
+					->location->altitude_wgs84ellipsoid;
+			if (loc->altitude_wgs84ellipsoid == 0.)
+				loc->altitude_wgs84ellipsoid = NAN;
+			loc->altitude_egm96amsl =
+				tm->lfic[index]->location->altitude_egm96amsl;
+			if (loc->altitude_egm96amsl == 0.)
+				loc->altitude_egm96amsl = NAN;
+			loc->latitude = tm->lfic[index]->location->latitude;
+			loc->longitude = tm->lfic[index]->location->longitude;
+			loc->sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
+			loc->valid = 1;
+			*estimated_precision =
+				tm->lfic[index]->location->horizontal_accuracy;
+		} else {
+			loc->valid = 0;
+		}
+		*x = tm->lfic[index]->x;
+		*y = tm->lfic[index]->y;
+		*grid_precision = tm->lfic[index]->grid_precision;
+		*type = vmeta_frame_lfic_type_proto_to_vmeta(
+			tm->lfic[index]->type);
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_tracking_box(struct vmeta_frame *meta,
+				 struct vmeta_rectf *box)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (tm->tracking == NULL || tm->tracking->target == NULL) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		box->left = tm->tracking->target->x;
+		box->top = tm->tracking->target->y;
+		box->width = tm->tracking->target->width;
+		box->height = tm->tracking->target->height;
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+	default:
+		res = -ENOSYS;
+	}
 	return res;
 }
 
@@ -1535,7 +2101,50 @@ int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_camera_subtype(struct vmeta_frame *meta,
+				   enum vmeta_camera_subtype *subtype)
+{
+	int res = 0;
+	const Vmeta__TimedMetadata *tm;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(subtype == NULL, EINVAL);
+	*subtype = VMETA_CAMERA_SUBTYPE_UNKNOWN;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res < 0)
+			break;
+		if (!tm->camera) {
+			res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*subtype = vmeta_camera_subtype_proto_to_vmeta(
+			tm->camera->subtype);
+		vmeta_frame_proto_release_unpacked(meta, tm);
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -1551,6 +2160,8 @@ enum vmeta_camera_type vmeta_camera_type_from_str(const char *str)
 
 	if (strcasecmp(str, "front") == 0) {
 		return VMETA_CAMERA_TYPE_FRONT;
+	} else if (strcasecmp(str, "front-stereo") == 0) {
+		return VMETA_CAMERA_TYPE_FRONT_STEREO;
 	} else if (strcasecmp(str, "front-stereo-left") == 0) {
 		return VMETA_CAMERA_TYPE_FRONT_STEREO_LEFT;
 	} else if (strcasecmp(str, "front-stereo-right") == 0) {
@@ -1559,8 +2170,22 @@ enum vmeta_camera_type vmeta_camera_type_from_str(const char *str)
 		return VMETA_CAMERA_TYPE_VERTICAL;
 	} else if (strcasecmp(str, "disparity") == 0) {
 		return VMETA_CAMERA_TYPE_DISPARITY;
+	} else if (strcasecmp(str, "horizontal-stereo") == 0) {
+		return VMETA_CAMERA_TYPE_HORIZONTAL_STEREO;
+	} else if (strcasecmp(str, "horizontal-stereo-left") == 0) {
+		return VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_LEFT;
+	} else if (strcasecmp(str, "horizontal-stereo-right") == 0) {
+		return VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_RIGHT;
+	} else if (strcasecmp(str, "down-stereo") == 0) {
+		return VMETA_CAMERA_TYPE_DOWN_STEREO;
+	} else if (strcasecmp(str, "down-stereo-left") == 0) {
+		return VMETA_CAMERA_TYPE_DOWN_STEREO_LEFT;
+	} else if (strcasecmp(str, "down-stereo-right") == 0) {
+		return VMETA_CAMERA_TYPE_DOWN_STEREO_RIGHT;
+	} else if (strcasecmp(str, "external") == 0) {
+		return VMETA_CAMERA_TYPE_EXTERNAL;
 	} else {
-		ULOGW("%s: unknown camera type '%s'", __func__, str);
+		ULOGE("%s: unknown camera type '%s'", __func__, str);
 		return VMETA_CAMERA_TYPE_UNKNOWN;
 	}
 }
@@ -1571,6 +2196,8 @@ const char *vmeta_camera_type_to_str(enum vmeta_camera_type val)
 	switch (val) {
 	case VMETA_CAMERA_TYPE_FRONT:
 		return "front";
+	case VMETA_CAMERA_TYPE_FRONT_STEREO:
+		return "front-stereo";
 	case VMETA_CAMERA_TYPE_FRONT_STEREO_LEFT:
 		return "front-stereo-left";
 	case VMETA_CAMERA_TYPE_FRONT_STEREO_RIGHT:
@@ -1579,6 +2206,98 @@ const char *vmeta_camera_type_to_str(enum vmeta_camera_type val)
 		return "vertical";
 	case VMETA_CAMERA_TYPE_DISPARITY:
 		return "disparity";
+	case VMETA_CAMERA_TYPE_HORIZONTAL_STEREO:
+		return "horizontal-stereo";
+	case VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_LEFT:
+		return "horizontal-stereo-left";
+	case VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_RIGHT:
+		return "horizontal-stereo-right";
+	case VMETA_CAMERA_TYPE_DOWN_STEREO:
+		return "down-stereo";
+	case VMETA_CAMERA_TYPE_DOWN_STEREO_LEFT:
+		return "down-stereo-left";
+	case VMETA_CAMERA_TYPE_DOWN_STEREO_RIGHT:
+		return "down-stereo-right";
+	case VMETA_CAMERA_TYPE_EXTERNAL:
+		return "external";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_camera_subtype vmeta_camera_subtype_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_CAMERA_SUBTYPE_UNKNOWN;
+
+	if (strcasecmp(str, "left") == 0) {
+		return VMETA_CAMERA_SUBTYPE_LEFT;
+	} else if (strcasecmp(str, "right") == 0) {
+		return VMETA_CAMERA_SUBTYPE_RIGHT;
+	} else if (strcasecmp(str, "wide") == 0) {
+		return VMETA_CAMERA_SUBTYPE_WIDE;
+	} else if (strcasecmp(str, "tele") == 0) {
+		return VMETA_CAMERA_SUBTYPE_TELE;
+	} else if (strcasecmp(str, "disparity") == 0) {
+		return VMETA_CAMERA_SUBTYPE_DISPARITY;
+	} else if (strcasecmp(str, "depth") == 0) {
+		return VMETA_CAMERA_SUBTYPE_DEPTH;
+	} else {
+		ULOGE("%s: unknown camera subtype '%s'", __func__, str);
+		return VMETA_CAMERA_SUBTYPE_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_camera_subtype_to_str(enum vmeta_camera_subtype val)
+{
+	switch (val) {
+	case VMETA_CAMERA_SUBTYPE_LEFT:
+		return "left";
+	case VMETA_CAMERA_SUBTYPE_RIGHT:
+		return "right";
+	case VMETA_CAMERA_SUBTYPE_WIDE:
+		return "wide";
+	case VMETA_CAMERA_SUBTYPE_TELE:
+		return "tele";
+	case VMETA_CAMERA_SUBTYPE_DISPARITY:
+		return "disparity";
+	case VMETA_CAMERA_SUBTYPE_DEPTH:
+		return "depth";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_camera_spectrum vmeta_camera_spectrum_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_CAMERA_SPECTRUM_UNKNOWN;
+
+	if (strcasecmp(str, "visible") == 0) {
+		return VMETA_CAMERA_SPECTRUM_VISIBLE;
+	} else if (strcasecmp(str, "thermal") == 0) {
+		return VMETA_CAMERA_SPECTRUM_THERMAL;
+	} else if (strcasecmp(str, "blended") == 0) {
+		return VMETA_CAMERA_SPECTRUM_BLENDED;
+	} else {
+		ULOGE("%s: unknown camera spectrum '%s'", __func__, str);
+		return VMETA_CAMERA_SPECTRUM_UNKNOWN;
+	}
+}
+
+
+const char *vmeta_camera_spectrum_to_str(enum vmeta_camera_spectrum val)
+{
+	switch (val) {
+	case VMETA_CAMERA_SPECTRUM_VISIBLE:
+		return "visible";
+	case VMETA_CAMERA_SPECTRUM_THERMAL:
+		return "thermal";
+	case VMETA_CAMERA_SPECTRUM_BLENDED:
+		return "blended";
 	default:
 		return "unknown";
 	}
@@ -1595,7 +2314,7 @@ enum vmeta_camera_model_type vmeta_camera_model_type_from_str(const char *str)
 	} else if (strcasecmp(str, "fisheye") == 0) {
 		return VMETA_CAMERA_MODEL_TYPE_FISHEYE;
 	} else {
-		ULOGW("%s: unknown camera model type '%s'", __func__, str);
+		ULOGE("%s: unknown camera model type '%s'", __func__, str);
 		return VMETA_CAMERA_MODEL_TYPE_UNKNOWN;
 	}
 }
@@ -1614,6 +2333,19 @@ const char *vmeta_camera_model_type_to_str(enum vmeta_camera_model_type val)
 }
 
 
+const char *vmeta_overlay_type_to_str(enum vmeta_overlay_type val)
+{
+	switch (val) {
+	case VMETA_OVERLAY_TYPE_NONE:
+		return "none";
+	case VMETA_OVERLAY_TYPE_HEADER_FOOTER:
+		return "header_footer";
+	default:
+		return "unknown";
+	}
+}
+
+
 enum vmeta_video_mode vmeta_video_mode_from_str(const char *str)
 {
 	if (str == NULL)
@@ -1625,8 +2357,10 @@ enum vmeta_video_mode vmeta_video_mode_from_str(const char *str)
 		return VMETA_VIDEO_MODE_HYPERLAPSE;
 	} else if (strcasecmp(str, "slowmotion") == 0) {
 		return VMETA_VIDEO_MODE_SLOWMOTION;
+	} else if (strcasecmp(str, "streamrec") == 0) {
+		return VMETA_VIDEO_MODE_STREAMREC;
 	} else {
-		ULOGW("%s: unknown video mode '%s'", __func__, str);
+		ULOGE("%s: unknown video mode '%s'", __func__, str);
 		return VMETA_VIDEO_MODE_UNKNOWN;
 	}
 }
@@ -1641,6 +2375,8 @@ const char *vmeta_video_mode_to_str(enum vmeta_video_mode val)
 		return "hyperlapse";
 	case VMETA_VIDEO_MODE_SLOWMOTION:
 		return "slowmotion";
+	case VMETA_VIDEO_MODE_STREAMREC:
+		return "streamrec";
 	default:
 		return "unknown";
 	}
@@ -1669,7 +2405,7 @@ enum vmeta_video_stop_reason vmeta_video_stop_reason_from_str(const char *str)
 	} else if (strcasecmp(str, "internal-error") == 0) {
 		return VMETA_VIDEO_STOP_REASON_INTERNAL_ERROR;
 	} else {
-		ULOGW("%s: unknown stop reason '%s'", __func__, str);
+		ULOGE("%s: unknown stop reason '%s'", __func__, str);
 		return VMETA_VIDEO_STOP_REASON_UNKNOWN;
 	}
 }
@@ -1751,7 +2487,7 @@ enum vmeta_dynamic_range vmeta_dynamic_range_from_str(const char *str)
 	} else if (strcasecmp(str, "hdr10") == 0) {
 		return VMETA_DYNAMIC_RANGE_HDR10;
 	} else {
-		ULOGW("%s: unknown dynamic range '%s'", __func__, str);
+		ULOGE("%s: unknown dynamic range '%s'", __func__, str);
 		return VMETA_DYNAMIC_RANGE_UNKNOWN;
 	}
 }
@@ -1782,7 +2518,7 @@ enum vmeta_tone_mapping vmeta_tone_mapping_from_str(const char *str)
 	} else if (strcasecmp(str, "p-log") == 0) {
 		return VMETA_TONE_MAPPING_P_LOG;
 	} else {
-		ULOGW("%s: unknown tone mapping '%s'", __func__, str);
+		ULOGE("%s: unknown tone mapping '%s'", __func__, str);
 		return VMETA_TONE_MAPPING_UNKNOWN;
 	}
 }

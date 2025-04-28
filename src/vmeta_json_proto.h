@@ -32,6 +32,7 @@
  * argument as other function arguments (used in vmeta_json_add_array for 3d arg
  * of object_nester) */
 union array_element_type {
+	const Vmeta__LFICMetadata *lfic;
 	const Vmeta__BoundingBox *bbox;
 	const Vmeta__LinkMetadata *link;
 	const Vmeta__StarfishLinkInfo *starfish_info;
@@ -159,6 +160,11 @@ void vmeta_json_proto_add_lfic_metadata(struct json_object *jobj,
 void vmeta_json_proto_add_thermal_spot(struct json_object *jobj,
 				       const char *name,
 				       const Vmeta__ThermalSpot *thermal);
+
+
+void vmeta_json_proto_add_thermal_mask(struct json_object *jobj,
+				       const char *name,
+				       const Vmeta__Rectf *thermal);
 
 
 #endif /* !_VMETA_JSON_PROTO_H_ */

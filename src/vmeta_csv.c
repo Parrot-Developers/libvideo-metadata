@@ -140,14 +140,22 @@ size_t vmeta_csv_add_thermal_spot(char *str,
 		VMETA_STR_PRINT(str,
 				len,
 				maxlen,
-				"%d %.5f %.5f %.5f",
+				"%d %.5f %.5f %.5f %" PRId32,
 				val->valid,
 				val->x,
 				val->y,
-				val->temp);
+				val->temp,
+				val->value);
 	} else {
-		VMETA_STR_PRINT(
-			str, len, maxlen, "%d %.5f %.5f %.5f", 0, 0., 0., 0.);
+		VMETA_STR_PRINT(str,
+				len,
+				maxlen,
+				"%d %.5f %.5f %.5f %" PRId32,
+				0,
+				0.,
+				0.,
+				0.,
+				(int32_t)0);
 	}
 
 	return len;

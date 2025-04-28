@@ -24,56 +24,64 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "vmeta_test.h"
+#include "vmeta_priv.h"
 
-ULOG_DECLARE_TAG(ULOG_TAG);
 
-static CU_SuiteInfo s_suites[] = {
-	{(char *)"vmeta frame protobuf", NULL, NULL, s_proto_tests},
-	{(char *)"vmeta frame v3", NULL, NULL, s_v3_tests},
-	{(char *)"vmeta session", NULL, NULL, s_session_tests},
-	{(char *)"vmeta utils", NULL, NULL, s_utils_tests},
-	CU_SUITE_INFO_NULL,
-};
-
-static CU_SuiteInfo s_monkey_suites[] = {
-	{(char *)"protobuf monkey tests", NULL, NULL, s_proto_monkey},
-	{(char *)"meta_v3 monkey tests", NULL, NULL, s_v3_monkey},
-	CU_SUITE_INFO_NULL,
-};
-
-static CU_SuiteInfo s_dump_suites[] = {
-	{(char *)"protobuf reference buffer gen", NULL, NULL, s_proto_gen},
-	{(char *)"meta_v3 reference buffer gen", NULL, NULL, s_v3_gen},
-	CU_SUITE_INFO_NULL,
-};
-
-int main(int argc, char *argv[])
+Vmeta__CameraSubtype
+vmeta_camera_subtype_vmeta_to_proto(enum vmeta_camera_subtype subtype)
 {
-	int i;
-	CU_initialize_registry();
-	CU_register_suites(s_suites);
-
-	for (i = 1; i < argc; i++) {
-		if (strcmp(argv[i], "monkey") == 0)
-			CU_register_suites(s_monkey_suites);
-		if (strcmp(argv[i], "dump") == 0) {
-			CU_cleanup_registry();
-			CU_initialize_registry();
-			CU_register_suites(s_dump_suites);
-			break;
-		}
+	Vmeta__CameraSubtype out = VMETA__CAMERA_SUBTYPE__CST_UNKNOWN;
+	switch (subtype) {
+	case VMETA_CAMERA_SUBTYPE_LEFT:
+		out = VMETA__CAMERA_SUBTYPE__CST_LEFT;
+		break;
+	case VMETA_CAMERA_SUBTYPE_RIGHT:
+		out = VMETA__CAMERA_SUBTYPE__CST_RIGHT;
+		break;
+	case VMETA_CAMERA_SUBTYPE_WIDE:
+		out = VMETA__CAMERA_SUBTYPE__CST_WIDE;
+		break;
+	case VMETA_CAMERA_SUBTYPE_TELE:
+		out = VMETA__CAMERA_SUBTYPE__CST_TELE;
+		break;
+	case VMETA_CAMERA_SUBTYPE_DISPARITY:
+		out = VMETA__CAMERA_SUBTYPE__CST_DISPARITY;
+		break;
+	case VMETA_CAMERA_SUBTYPE_DEPTH:
+		out = VMETA__CAMERA_SUBTYPE__CST_DEPTH;
+		break;
+	default:
+		break;
 	}
+	return out;
+}
 
-	if (getenv("CUNIT_OUT_NAME") != NULL)
-		CU_set_output_filename(getenv("CUNIT_OUT_NAME"));
-	if (getenv("CUNIT_AUTOMATED") != NULL) {
-		CU_automated_run_tests();
-		CU_list_tests_to_file();
-	} else {
-		CU_basic_set_mode(CU_BRM_VERBOSE);
-		CU_basic_run_tests();
+
+VMETA_API enum vmeta_camera_subtype
+vmeta_camera_subtype_proto_to_vmeta(Vmeta__CameraSubtype subtype)
+{
+	enum vmeta_camera_subtype out = VMETA_CAMERA_SUBTYPE_UNKNOWN;
+	switch (subtype) {
+	case VMETA__CAMERA_SUBTYPE__CST_LEFT:
+		out = VMETA_CAMERA_SUBTYPE_LEFT;
+		break;
+	case VMETA__CAMERA_SUBTYPE__CST_RIGHT:
+		out = VMETA_CAMERA_SUBTYPE_RIGHT;
+		break;
+	case VMETA__CAMERA_SUBTYPE__CST_WIDE:
+		out = VMETA_CAMERA_SUBTYPE_WIDE;
+		break;
+	case VMETA__CAMERA_SUBTYPE__CST_TELE:
+		out = VMETA_CAMERA_SUBTYPE_TELE;
+		break;
+	case VMETA__CAMERA_SUBTYPE__CST_DISPARITY:
+		out = VMETA_CAMERA_SUBTYPE_DISPARITY;
+		break;
+	case VMETA__CAMERA_SUBTYPE__CST_DEPTH:
+		out = VMETA_CAMERA_SUBTYPE_DEPTH;
+		break;
+	default:
+		break;
 	}
-	CU_cleanup_registry();
-	return 0;
+	return out;
 }

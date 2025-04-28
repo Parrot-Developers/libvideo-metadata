@@ -58,6 +58,19 @@ const char *vmeta_flying_state_str(enum vmeta_flying_state val)
 }
 
 
+const char *vmeta_lfic_type_str(enum vmeta_lfic_type val)
+{
+	switch (val) {
+	case VMETA_LFIC_TYPE_COT:
+		return "COT";
+	case VMETA_LFIC_TYPE_USER:
+		return "USER";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+
 const char *vmeta_piloting_mode_str(enum vmeta_piloting_mode val)
 {
 	switch (val) {
@@ -216,7 +229,7 @@ int vmeta_frame_write(struct vmeta_buffer *buf, struct vmeta_frame *meta)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -249,10 +262,12 @@ int vmeta_frame_read2(struct vmeta_buffer *buf,
 	meta = calloc(1, sizeof(*meta));
 	if (!meta) {
 		res = -ENOMEM;
+		ULOG_ERRNO("calloc", -res);
 		goto out;
 	}
 	res = vmeta_frame_ref(meta);
 	if (res != 0) {
+		ULOG_ERRNO("vmeta_frame_ref", -res);
 		free(meta);
 		meta = NULL;
 		goto out;
@@ -273,7 +288,7 @@ int vmeta_frame_read2(struct vmeta_buffer *buf,
 			   0) {
 			meta->type = VMETA_FRAME_TYPE_PROTO;
 		} else {
-			ULOGW("unknown metadata MIME type: '%s'", mime_type);
+			ULOGE("unknown metadata MIME type: '%s'", mime_type);
 			res = -ENOSYS;
 			goto out;
 		}
@@ -296,7 +311,7 @@ int vmeta_frame_read2(struct vmeta_buffer *buf,
 				meta->type =
 					VMETA_FRAME_TYPE_V1_STREAMING_BASIC;
 			} else {
-				ULOGW("bad metadata streaming v1 length: %zu",
+				ULOGE("bad metadata streaming v1 length: %zu",
 				      len);
 				res = -EPROTO;
 				goto out;
@@ -312,7 +327,7 @@ int vmeta_frame_read2(struct vmeta_buffer *buf,
 			break;
 
 		default:
-			ULOGW("unknown metadata id: 0x%04x", id);
+			ULOGE("unknown metadata id: 0x%04x", id);
 			res = -EPROTO;
 			goto out;
 		}
@@ -351,7 +366,7 @@ int vmeta_frame_read2(struct vmeta_buffer *buf,
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -359,7 +374,7 @@ int vmeta_frame_read2(struct vmeta_buffer *buf,
 	if (res != 0 || convert == 0)
 		goto out;
 	/* Convert metadata to PROTO */
-	if (meta->type != VMETA_FRAME_TYPE_PROTO) {
+	if (meta->type == VMETA_FRAME_TYPE_V3) {
 		struct vmeta_frame *proto = NULL;
 		res = vmeta_frame_convert(meta, &proto, VMETA_FRAME_TYPE_PROTO);
 		if (res != 0) {
@@ -391,10 +406,12 @@ int vmeta_frame_new(enum vmeta_frame_type type, struct vmeta_frame **ret_obj)
 	struct vmeta_frame *meta = calloc(1, sizeof(*meta));
 	if (!meta) {
 		res = -ENOMEM;
+		ULOG_ERRNO("calloc", -res);
 		goto out;
 	}
 	res = vmeta_frame_ref(meta);
 	if (res != 0) {
+		ULOG_ERRNO("vmeta_frame_ref", -res);
 		free(meta);
 		meta = NULL;
 		goto out;
@@ -417,7 +434,7 @@ int vmeta_frame_new(enum vmeta_frame_type type, struct vmeta_frame **ret_obj)
 		break;
 
 	default:
-		ULOGW("unknown metadata streaming type: %u", meta->type);
+		ULOGE("unknown metadata streaming type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -478,8 +495,10 @@ int vmeta_frame_unref(struct vmeta_frame *meta)
 		break;
 
 	case VMETA_FRAME_TYPE_PROTO:
-		res = vmeta_frame_proto_destroy(meta->proto);
-		meta->proto = NULL;
+		if (meta->proto != NULL) {
+			res = vmeta_frame_proto_destroy(meta->proto);
+			meta->proto = NULL;
+		}
 		break;
 
 	default:
@@ -549,7 +568,7 @@ int vmeta_frame_to_json(struct vmeta_frame *meta, struct json_object *jobj)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		res = -ENOSYS;
 		break;
 	}
@@ -626,7 +645,7 @@ vmeta_frame_to_csv(const struct vmeta_frame *meta, char *str, size_t maxlen)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", meta->type);
+		ULOGE("unknown metadata type: %u", meta->type);
 		return -ENOSYS;
 	}
 
@@ -670,7 +689,7 @@ vmeta_frame_csv_header(enum vmeta_frame_type type, char *str, size_t maxlen)
 		break;
 
 	default:
-		ULOGW("unknown metadata type: %u", type);
+		ULOGE("unknown metadata type: %u", type);
 		return -ENOSYS;
 	}
 
@@ -694,7 +713,7 @@ const char *vmeta_frame_get_mime_type(enum vmeta_frame_type type)
 	case VMETA_FRAME_TYPE_PROTO:
 		return VMETA_FRAME_PROTO_MIME_TYPE;
 	default:
-		ULOGW("unknown metadata type: %u", type);
+		ULOGE("unknown metadata type: %u", type);
 		return NULL;
 	}
 }
@@ -1152,6 +1171,9 @@ int vmeta_frame_ext_thermal_read(struct vmeta_buffer *buf,
 	CHECK(vmeta_read_f32_i16(buf, &meta->probe.temp, 5));
 	CHECK(vmeta_read_u8(buf, (uint8_t *)&meta->calib_state));
 	CHECK(vmeta_read_u8(buf, &flags));
+	meta->min.value = -1;
+	meta->max.value = -1;
+	meta->probe.value = -1;
 	meta->min.valid = flags & 0x1;
 	meta->max.valid = (flags >> 1) & 0x1;
 	meta->probe.valid = (flags >> 2) & 0x1;
@@ -1367,6 +1389,8 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 		}
 		/* ground_distance */
 		drone->ground_distance = base->ground_distance;
+		/* altitude above takeoff */
+		drone->altitude_ato = NAN;
 		/* speed */
 		ned = vmeta_frame_proto_get_drone_speed(drone);
 		if (ned == NULL)
@@ -1403,6 +1427,8 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 		camera->hfov = base->picture_hfov * M_PI / 180.;
 		/* picture_vfov, deg->rad */
 		camera->vfov = base->picture_vfov * M_PI / 180.;
+		/* zoom level */
+		camera->zoom_level = NAN;
 		/* link_goodput */
 		wifi->goodput = base->link_goodput;
 		/* link_quality */
@@ -1523,6 +1549,7 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 			spot->x = thermalv3->min.x;
 			spot->y = thermalv3->min.y;
 			spot->temp = thermalv3->min.temp;
+			spot->value = thermalv3->min.value;
 		}
 		/* max */
 		if (thermalv3->max.valid) {
@@ -1532,6 +1559,7 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 			spot->x = thermalv3->max.x;
 			spot->y = thermalv3->max.y;
 			spot->temp = thermalv3->max.temp;
+			spot->value = thermalv3->max.value;
 		}
 		/* probe */
 		if (thermalv3->probe.valid) {
@@ -1541,13 +1569,14 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 			spot->x = thermalv3->probe.x;
 			spot->y = thermalv3->probe.y;
 			spot->temp = thermalv3->probe.temp;
+			spot->value = thermalv3->probe.value;
 		}
 	}
 
 	/* Convert v3.lfic */
 	if (in_frame->v3.has_lfic) {
 		struct vmeta_frame_ext_lfic *lficv3 = &in_frame->v3.lfic;
-		lfic = vmeta_frame_proto_get_lfic(proto);
+		lfic = vmeta_frame_proto_get_lfic_by_index(proto, 0);
 		if (lfic == NULL)
 			goto out;
 		/* target_x */
@@ -1579,6 +1608,8 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 		}
 		/* grid_precision */
 		lfic->grid_precision = lficv3->grid_precision;
+		/* lfic type */
+		lfic->type = VMETA__LFIC_TYPE__LFIC_TYPE_COT;
 	}
 
 

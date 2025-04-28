@@ -30,20 +30,23 @@ LOCAL_EXPORT_CUSTOM_VARIABLES := LIBVIDEOMETADATA_HEADERS=$\
 	$(LOCAL_PATH)/include/video-metadata/vmeta_frame_v1.h:$\
 	$(LOCAL_PATH)/include/video-metadata/vmeta_frame_v2.h:$\
 	$(LOCAL_PATH)/include/video-metadata/vmeta_frame_v3.h:$\
-	$(LOCAL_PATH)/include/video-metadata/vmeta_session.h;
+	$(LOCAL_PATH)/include/video-metadata/vmeta_session.h:$\
+	$(LOCAL_PATH)/include/video-metadata/vmeta_session_proto.h;
 
 LOCAL_CFLAGS := -DVMETA_API_EXPORTS -fvisibility=hidden -std=gnu99
 
 LOCAL_SRC_FILES := \
-	src/vmeta_session.c \
-	src/vmeta_frame.c \
-	src/vmeta_json.c \
-	src/vmeta_json_proto.c \
 	src/vmeta_csv.c \
 	src/vmeta_frame_proto.c \
 	src/vmeta_frame_v1.c \
 	src/vmeta_frame_v2.c \
 	src/vmeta_frame_v3.c \
+	src/vmeta_frame.c \
+	src/vmeta_json_proto.c \
+	src/vmeta_json.c \
+	src/vmeta_proto.c \
+	src/vmeta_session_proto.c \
+	src/vmeta_session.c \
 	src/vmeta_utils.c
 
 LOCAL_LIBRARIES := \
@@ -58,7 +61,6 @@ ifeq ("$(TARGET_OS)","windows")
 endif
 
 include $(BUILD_LIBRARY)
-
 
 ifeq ("$(TARGET_OS_FLAVOUR)","native")
   ifeq ("$(shell which pcap-config &> /dev/null; echo $$?)", "0")
@@ -79,9 +81,14 @@ LOCAL_CATEGORY_PATH := multimedia
 LOCAL_SRC_FILES := tools/vmeta_extract.c
 
 LOCAL_LIBRARIES := \
+	json \
+	libfutils \
+	libpomp \
+	libtransport-packet \
 	libulog \
 	libvideo-metadata \
-	json
+	libvideo-metadata-extract \
+	libvideo-streaming
 
 LOCAL_CONDITIONAL_LIBRARIES := \
 	OPTIONAL:libmp4 \
@@ -105,6 +112,31 @@ LOCAL_COPY_FILES := tools/vmeta_json_to_csv.py:usr/bin/$(LOCAL_MODULE).py
 
 include $(BUILD_CUSTOM)
 
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := libvideo-metadata-extract
+LOCAL_CATEGORY_PATH := libs
+LOCAL_DESCRIPTION := Parrot Drones video metadata extraction library
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/libvideo-metadata-extract/include
+LOCAL_EXPORT_CUSTOM_VARIABLES := LIBVIDEOMETADATAEXTRACT_HEADERS=$\
+	$(LOCAL_PATH)libvideo-metadata-extract/include/video-metadata/vmeta_extract.h:$\
+LOCAL_CFLAGS := -DVMETAEXTRACT_API_EXPORTS -fvisibility=hidden -std=gnu99
+LOCAL_SRC_FILES := \
+	libvideo-metadata-extract/src/vmeta_extract.c
+LOCAL_LIBRARIES := \
+	libmp4 \
+	libfutils \
+	libpomp \
+	libtransport-packet \
+	libulog \
+	libvideo-metadata \
+	libvideo-streaming
+
+ifeq ("$(TARGET_OS)","windows")
+  LOCAL_LDLIBS += -lws2_32
+endif
+include $(BUILD_LIBRARY)
+
 
 ifdef TARGET_TEST
 
@@ -116,6 +148,7 @@ LOCAL_SRC_FILES := \
 	tests/vmeta_test.c \
 	tests/vmeta_test_compare.c \
 	tests/vmeta_test_proto.c \
+	tests/vmeta_test_session.c \
 	tests/vmeta_test_utils.c \
 	tests/vmeta_test_v3.c
 

@@ -88,6 +88,11 @@ int vmeta_json_add_xyz(struct json_object *jobj,
 		       const struct vmeta_xyz *val);
 
 
+int vmeta_json_add_xy(struct json_object *jobj,
+		      const char *name,
+		      const struct vmeta_xy *val);
+
+
 int vmeta_json_add_ned(struct json_object *jobj,
 		       const char *name,
 		       const struct vmeta_ned *val);

@@ -111,6 +111,20 @@ int vmeta_json_add_xyz(struct json_object *jobj,
 }
 
 
+int vmeta_json_add_xy(struct json_object *jobj,
+		      const char *name,
+		      const struct vmeta_xy *val)
+{
+	struct json_object *jobj_val = json_object_new_object();
+
+	vmeta_json_add_double(jobj_val, "x", val->x);
+	vmeta_json_add_double(jobj_val, "y", val->y);
+
+	json_object_object_add(jobj, name, jobj_val);
+	return 0;
+}
+
+
 int vmeta_json_add_ned(struct json_object *jobj,
 		       const char *name,
 		       const struct vmeta_ned *val)
@@ -182,6 +196,7 @@ int vmeta_json_add_thermal_spot(struct json_object *jobj,
 	vmeta_json_add_double(jobj_val, "x", val->x);
 	vmeta_json_add_double(jobj_val, "y", val->y);
 	vmeta_json_add_double(jobj_val, "temp", val->temp);
+	vmeta_json_add_int(jobj_val, "value", val->value);
 
 	json_object_object_add(jobj, name, jobj_val);
 	return 0;

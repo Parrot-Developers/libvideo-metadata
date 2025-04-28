@@ -69,6 +69,9 @@ enum TrackingState {
 
 	/* Searching */
 	TS_SEARCHING = 1;
+
+	/* Pause */
+	TS_PAUSE = 2;
 }
 
 enum FlyingState {
@@ -183,11 +186,19 @@ enum LinkType {
 	/* Reserved */
 	LINK_TYPE_LAN = 2;
 
-	/* Wlan (Wi-Fi) interface */
+	/* Wlan (Wi-Fi or other) interface */
 	LINK_TYPE_WLAN = 3;
 
-	/* Cellular (4G) interface */
+	/* Cellular (4G/5G) interface */
 	LINK_TYPE_CELLULAR = 4;
+}
+
+enum LficType {
+	/* Cursor on target LFIC */
+	LFIC_TYPE_COT = 0;
+
+	/* User LFIC */
+	LFIC_TYPE_USER = 1;
 }
 
 enum LinkStatus {
@@ -221,6 +232,160 @@ enum ThermalCalibrationState {
 	TCS_IN_PROGRESS = 2;
 }
 
+enum CameraSpectrum {
+	/* Unknown spectrum */
+	CS_UNKNOWN = 0;
+
+	/* Visible spectrum */
+	CS_VISIBLE = 1;
+
+	/* Blended spectrum */
+	CS_BLENDED = 2;
+
+	/* Thermal spectrum */
+	CS_THERMAL = 3;
+}
+
+enum CameraType {
+	/* Unknown camera type */
+	CT_UNKNOWN = 0;
+
+	/* Front camera */
+	CT_FRONT = 1;
+
+	/* Front stereo left camera */
+	CT_FRONT_STEREO_LEFT = 2;
+
+	/* Front stereo right camera */
+	CT_FRONT_STEREO_RIGHT = 3;
+
+	/* Vertical camera */
+	CT_VERTICAL = 4;
+
+	/* Disparity map */
+	CT_DISPARITY = 5;
+
+	/* Horizontal stereo left camera */
+	CT_HORIZONTAL_STEREO_LEFT = 6;
+
+	/* Horizontal stereo right camera */
+	CT_HORIZONTAL_STEREO_RIGHT = 7;
+
+	/* Down stereo left camera */
+	CT_DOWN_STEREO_LEFT = 8;
+
+	/* Down stereo right camera */
+	CT_DOWN_STEREO_RIGHT = 9;
+
+	/* Front stereo camera */
+	CT_FRONT_STEREO = 10;
+
+	/* Horizontal stereo camera */
+	CT_HORIZONTAL_STEREO = 11;
+
+	/* Down stereo camera */
+	CT_DOWN_STEREO = 12;
+
+	/* External camera */
+	CT_EXTERNAL = 13;
+}
+
+enum CameraSubtype {
+	/* Unknown camera type */
+	CST_UNKNOWN = 0;
+
+	/* Left camera */
+	CST_LEFT = 1;
+
+	/* Right camera */
+	CST_RIGHT = 2;
+
+	/* Wide camera */
+	CST_WIDE = 3;
+
+	/* Tele camera */
+	CST_TELE = 4;
+
+	/* Disparity map camera */
+	CST_DISPARITY = 5;
+
+	/* DEPTH map camera */
+	CST_DEPTH = 6;
+}
+
+enum VideoMode {
+	/* Unknown video mode */
+	VM_UNKNOWN = 0;
+
+	/* Standard video mode */
+	VM_STANDARD = 1;
+
+	/* Hyperlapse video mode */
+	VM_HYPERLAPSE = 2;
+
+	/* Slow motion video mode */
+	VM_SLOWMOTION = 3;
+
+	/* Stream recording video mode */
+	VM_STREAMREC = 4;
+}
+
+enum VideoStopReason {
+	/* Unknown stop reason */
+	VSR_UNKNOWN = 0;
+
+	/* User request stop reason */
+	VSR_USER = 1;
+
+	/* Reconfigure stop reason */
+	VSR_RECONFIGURATION = 2;
+
+	/* Poor storage performance stop reason */
+	VSR_POOR_STORAGE_PERF = 3;
+
+	/* Storage full stop reason */
+	VSR_STORAGE_FULL = 4;
+
+	/* Recovery stop reason */
+	VSR_RECOVERY = 5;
+
+	/* End-of-stream stop reason */
+	VSR_END_OF_STREAM = 6;
+
+	/* Shutdown stop reason */
+	VSR_SHUTDOWN = 7;
+
+	/* Internal error stop reason */
+	VSR_INTERNAL_ERROR = 8;
+}
+
+enum DynamicRange {
+	/* Unknown dynamic range */
+	DR_UNKNOWN = 0;
+
+	/* Standard dynamic range */
+	DR_SDR = 1;
+
+	/* High dynamic range: Parrot 8bit HDR */
+	DR_HDR8 = 2;
+
+	/* High dynamic range: standard 10bit HDR10
+	 * (Rec. ITU-R BT.2020 color primaries,
+	 * SMPTE ST 2084 perceptual quantization transfer function
+	 * and SMPTE ST 2086 metadata) */
+	DR_HDR10 = 3;
+}
+
+enum ToneMapping {
+	/* Unknown tone mapping */
+	TM_UNKNOWN = 0;
+
+	/* Standard tone mapping */
+	TM_STANDARD = 1;
+
+	/* Parrot P-log tone mapping */
+	TM_P_LOG = 2;
+}
 
 /**
  * Commonly used structures
@@ -232,6 +397,18 @@ message Quaternion {
 	float x = 2;
 	float y = 3;
 	float z = 4;
+}
+
+/* Euler angles */
+message Euler {
+	/* Same as psi */
+	float yaw = 1;
+
+	/* Same as theta */
+	float pitch = 2;
+
+	/* Same as phi */
+	float roll = 3;
 }
 
 /* Location on earth */
@@ -275,6 +452,17 @@ message NED {
 	float down = 3;
 }
 
+/* Rectangle (float) for normalized coordinates [0.0 .. 1.0] */
+message Rectf {
+	/* Position [0; 1] in picture */
+	float x = 1;
+	float y = 2;
+
+	/* Size [0; 1] in picture */
+	float width = 3;
+	float height = 4;
+}
+
 /* Bounding box for tracking and proposal */
 message BoundingBox {
 	/* Position [0; 1] in picture */
@@ -298,13 +486,16 @@ message BoundingBox {
 
 /* Thermal spot for thermal metadata */
 message ThermalSpot {
-	/* Position [0; 1] in picture */
+	/* Position [0; 1] in picture (-1 means unknown) */
 	float x = 1;
 	float y = 2;
 
-	/* Temperature, in either Kelvin for radiometric sensors,
-	 * or raw sensor unit for non-radiometric sensors */
+	/* Temperature in Kelvin for radiometric sensors (-1 means unknown) */
 	float temp = 3;
+
+	/* Temperature in raw sensor unit (unsigned 16-bit value;
+	 * -1 means unknown) */
+	int32 value = 4;
 }
 
 
@@ -323,6 +514,9 @@ message DroneMetadata {
 
 	/* Best ground distance estimation (m) */
 	double ground_distance = 3;
+
+	/* Altitude above take off (m) */
+	double altitude_ato = 13;
 
 	/* Estimated position of the drone in NED frame (m).
 	 * The position is initialized at first take off. When this position may
@@ -371,8 +565,11 @@ message CameraMetadata {
 	/* Frame base view quaternion (without user pan/tilt) */
 	Quaternion base_quat = 2;
 
-	/* Frame view quaternion */
+	/* Frame view quaternion in the global frame of reference (NED) */
 	Quaternion quat = 3;
+
+	/* Frame view quaternion in the local frame of reference */
+	Quaternion local_quat = 15;
 
 	/* Estimated position of the camera in the local frame (m).
 	 * The local frame is not NED: X and Y axis are arbitrary, but the Z
@@ -409,6 +606,19 @@ message CameraMetadata {
 
 	/* Frame vertical field of view (rad) */
 	float vfov = 9;
+
+	/* Camera zoom level */
+	float zoom_level = 16;
+
+	/* Camera spectrum; when not CS_UNKNOWN, this value overrides the one
+	 * from session metadata (e.g. in streamed video where thermal/visible
+	 * switches can occur) */
+	CameraSpectrum spectrum = 17;
+
+	/* Camera subtype; when not CS_UNKNOWN, this value overrides the one
+	 * from session metadata  (e.g. in video where wide/tele zoom switches
+	 * can occur) */
+	CameraSubtype subtype = 18;
 }
 
 message TrackingProposalMetadata {
@@ -517,6 +727,9 @@ message ThermalMetadata {
 
 	/* Probe temperature spot */
 	ThermalSpot probe = 4;
+
+	/* Thermal mask */
+	Rectf mask = 5;
 }
 
 message LFICMetadata {
@@ -529,6 +742,115 @@ message LFICMetadata {
 
 	/* Grid precision used for calculation (m) */
 	double grid_precision = 4;
+
+	/* Type of the LFIC */
+	LficType type = 5;
+}
+
+message CameraModel {
+	oneof id {
+		PerspectiveCameraModel perspective = 1;
+		FisheyeCameraModel fisheye = 2;
+	}
+
+	/* Perspective camera parameters */
+	message PerspectiveCameraModel {
+		/* Perspective distortion parameters */
+		message Distorsion {
+			float r1 = 1;
+			float r2 = 2;
+			float r3 = 3;
+			float t1 = 4;
+			float t2 = 5;
+		}
+		Distorsion distorsion = 1;
+	}
+
+	/* Fisheye camera parameters */
+	message FisheyeCameraModel {
+		/* Fisheye affine matrix coefficients */
+		message AffineMatrix {
+			float c = 1;
+			float d = 2;
+			float e = 3;
+			float f = 4;
+		}
+		AffineMatrix affine_matrix = 1;
+
+		/* Fisheye polynomial coefficients (note: p0 = 0 and p1 = 1) */
+		message Polynomial {
+			float p2 = 1;
+			float p3 = 2;
+			float p4 = 3;
+		}
+		Polynomial polynomial = 2;
+	}
+}
+
+message Overlay {
+	oneof id {
+		HeaderFooter header_footer = 1;
+	}
+
+	/* Header-footer overlay type */
+	message HeaderFooter {
+		/* Header height in percentage of the image */
+		float header_height = 1;
+		/* Footer height in percentage of the image */
+		float footer_height = 2;
+	}
+}
+
+message ThermalAlignment {
+	/* Visible camera orientation relative to the thermal camera,
+	 * order is yaw, pitch, roll */
+	Euler rotation = 1;
+}
+
+message ThermalConversion {
+	/* Camera temperature conversion responsivity parameter */
+	float r = 1;
+
+	/* Camera temperature conversion B parameter */
+	float b = 2;
+
+	/* Camera temperature conversion fit parameter */
+	float f = 3;
+
+	/* Camera temperature conversion offset parameter */
+	float o = 4;
+
+	/* Window transmission (0.0 .. 1.0) */
+	float tau_win = 5;
+
+	/* Window temperature (in Celsius degrees) */
+	float t_win = 6;
+
+	/* Scene background temperature (in Celsius degrees) */
+	float t_bg = 7;
+
+	/* Scene emissivity (0.0 .. 1.0) */
+	float emissivity = 8;
+}
+
+message ThermalSessionMetadata {
+	/* Thermal metadata version */
+	uint32 metaversion = 1;
+
+	/* Camera serial number */
+	string camera_serial_number = 2;
+
+	/* Camera alignment parameters */
+	ThermalAlignment alignment = 3;
+
+	/* Camera temperature conversion parameters (low gain) */
+	ThermalConversion conv_low = 4;
+
+	/* Camera temperature conversion parameters (high gain) */
+	ThermalConversion conv_high = 5;
+
+	/* Camera scale factor */
+	double scale_factor = 6;
 }
 
 message TimedMetadata {
@@ -554,5 +876,129 @@ message TimedMetadata {
 	ThermalMetadata thermal = 7;
 
 	/* Location From Image Coordinates (LFIC) metadata */
-	LFICMetadata lfic = 8;
+	repeated LFICMetadata lfic = 8;
+}
+
+message SessionMetadata {
+	/* Friendly name (generally the same as the wifi SSID) */
+	string friendly_name = 1;
+
+	/* Product maker (brand name, eg. "Parrot") */
+	string maker = 2;
+
+	/* Product model (commercial name, eg. "ANAFI Ai") */
+	string model = 3;
+
+	/* Model ID (ARSDK 16-bit model ID in hex ASCII, eg. "091a") */
+	string model_id = 4;
+
+	/* Product serial number (18 chars string for Parrot products) */
+	string serial_number = 5;
+
+	/* Software version (usually "<software_name> A.B.C"
+	 * with A=major, B=minor, C=build) */
+	string software_version = 6;
+
+	/* Software build ID (internal unique build identifier) */
+	string build_id = 7;
+
+	/* Video title */
+	string title = 8;
+
+	/* Video comment */
+	string comment = 9;
+
+	/* Video copyright */
+	string copyright = 10;
+
+	/* Media date and time in seconds since the Epoch
+	 * (record only, unused on live streaming) */
+	uint64 media_date = 11;
+
+	/* Media date GMT offset in seconds east (eg. GMT-6 is -21600)
+	 * (record only, unused on live streaming) */
+	int32 media_date_gmtoff = 12;
+
+	/* Boot date and time in seconds since the Epoch */
+	uint64 boot_date = 13;
+
+	/* Boot date GMT offset in seconds east (eg. GMT-6 is -21600) */
+	int32 boot_date_gmtoff = 14;
+
+	/* Boot UUID (32-chars hex string representing a 128bits value) */
+	string boot_id = 15;
+
+	/* Flight date and time in seconds since the Epoch */
+	uint64 flight_date = 16;
+
+	/* Flight date GMT offset in seconds east (eg. GMT-6 is -21600) */
+	int32 flight_date_gmtoff = 17;
+
+	/* Flight UUID (32-chars hex string representing a 128bits value) */
+	string flight_id = 18;
+
+	/* Application-defined custom ID */
+	string custom_id = 19;
+
+	/* Takeoff location */
+	Location takeoff_location = 20;
+
+	/* Picture field of view in rad */
+	Vector2 picture_fov = 21;
+
+	/* Thermal camera metadata */
+	ThermalSessionMetadata thermal = 22;
+
+	/* Default media flag (only used in SDP) */
+	bool default_media = 23;
+
+	/* Camera type */
+	CameraType camera_type = 24;
+
+	/* Camera subtype */
+	CameraSubtype camera_subtype = 36;
+
+	/* Camera spectrum */
+	CameraSpectrum camera_spectrum = 25;
+
+	/* Camera serial number (18 chars string for Parrot products) */
+	string camera_serial_number = 26;
+
+	/* Camera model */
+	CameraModel camera_model = 27;
+
+	/* Overlay */
+	Overlay overlay = 38;
+
+	/* Camera principal point normalized coordinates in picture [0; 1] */
+	Vector2 principal_point = 28;
+
+	/* Video mode */
+	VideoMode video_mode = 29;
+
+	/* Video stop reason */
+	VideoStopReason video_stop_reason = 30;
+
+	/* Image dynamic range */
+	DynamicRange dynamic_range = 31;
+
+	/* Image tone mapping */
+	ToneMapping tone_mapping = 32;
+
+	/* Capture timestamp of the first frame (optional, can be 0; can be used
+	 * for example on raw video to compute the frame capture timestamps) */
+	uint64 first_frame_capture_ts = 33;
+
+	/* Sample index of the first frame (optional, can be 0; can be used
+	 * for example on raw video to compute the frame capture timestamps) */
+	uint64 first_frame_sample_index = 37;
+
+	/* Unique media identifier of the video; a media is a single or a group
+	 * of resources [1:N] (optional, can be 0) */
+	uint32 media_id = 34;
+
+	/* Resource index of the video in the media ID; a resource is a media
+	 * file named using a pattern and a supported extension
+	 * (optional, can be 0) */
+	uint32 resource_index = 35;
 }

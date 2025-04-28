@@ -34,8 +34,100 @@
 	}
 
 
+#define MERGE_META_STR(_dst, _src, _field)                                     \
+	{                                                                      \
+		if (strlen(_dst->_field) != strlen(_src->_field)) {            \
+			_dst->_field[0] = '\0';                                \
+		}                                                              \
+		if (strncmp(_dst->_field,                                      \
+			    _src->_field,                                      \
+			    strlen(_src->_field)) != 0) {                      \
+			_dst->_field[0] = '\0';                                \
+		}                                                              \
+	}
+
+
+#define REMOVE_DUPLICATE_META_STR(_dst, _src, _field)                          \
+	{                                                                      \
+		if (_src->_field[0] != '\0') {                                 \
+			_dst->_field[0] = '\0';                                \
+		}                                                              \
+	}
+
+
+#define MERGE_META_VAL(_dst, _src, _field, _v)                                 \
+	{                                                                      \
+		if (_dst->_field != _src->_field) {                            \
+			_dst->_field = _v;                                     \
+		}                                                              \
+	}
+
+
+#define REMOVE_DUPLICATE_META_VAL(_dst, _src, _field, _v)                      \
+	{                                                                      \
+		if (_src->_field != _v) {                                      \
+			_dst->_field = _v;                                     \
+		}                                                              \
+	}
+
+
+#define MERGE_META_PTR(_dst, _src, _field, _size)                              \
+	{                                                                      \
+		if (memcmp(_dst->_field, _src->_field, _size) != 0) {          \
+			memset(_dst->_field, 0, _size);                        \
+		}                                                              \
+	}
+
+
+#define REMOVE_DUPLICATE_META_PTR(_dst, _src, _field, _size)                   \
+	{                                                                      \
+		if (memcmp(_dst->_field, _src->_field, _size) == 0) {          \
+			memset(_dst->_field, 0, _size);                        \
+		}                                                              \
+	}
+
+
+#define CMP_FIELD_VAL(_dst, _src, _field)                                      \
+	{                                                                      \
+		if (_dst->_field != _src->_field)                              \
+			return 0;                                              \
+	}
+
+
+#define CMP_FIELD_VAL_NAN_ALLOWED(_dst, _src, _field)                          \
+	{                                                                      \
+		if (isnan(_dst->_field) != isnan(_src->_field))                \
+			return 0;                                              \
+		if (!isnan(_dst->_field) && _dst->_field != _src->_field)      \
+			return 0;                                              \
+	}
+
+
+#define CMP_FIELD_PTR(_dst, _src, _field)                                      \
+	{                                                                      \
+		if (memcmp(&_dst->_field,                                      \
+			   &_src->_field,                                      \
+			   sizeof(_dst->_field)) != 0) {                       \
+			return 0;                                              \
+		}                                                              \
+	}
+
+
+#define CMP_FIELD_STR(_dst, _src, _field)                                      \
+	{                                                                      \
+		if (strlen(_dst->_field) != strlen(_src->_field)) {            \
+			return 0;                                              \
+		}                                                              \
+		if (strncmp(_dst->_field,                                      \
+			    _src->_field,                                      \
+			    strlen(_dst->_field)) != 0) {                      \
+			return 0;                                              \
+		}                                                              \
+	}
+
+
 ssize_t
-vmeta_session_date_write(char *str, size_t len, time_t date, long gmtoff)
+vmeta_session_date_write(char *str, size_t len, uint64_t date, long gmtoff)
 {
 	int ret;
 	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
@@ -48,7 +140,7 @@ vmeta_session_date_write(char *str, size_t len, time_t date, long gmtoff)
 }
 
 
-int vmeta_session_date_read(const char *str, time_t *date, long *gmtoff)
+int vmeta_session_date_read(const char *str, uint64_t *date, long *gmtoff)
 {
 	int ret;
 	uint64_t epoch_sec;
@@ -330,6 +422,44 @@ int vmeta_session_fisheye_polynomial_read(const char *str,
 }
 
 
+ssize_t vmeta_session_overlay_header_footer_write(char *str,
+						  size_t len,
+						  float header_height,
+						  float footer_height)
+{
+	size_t ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+
+	ret = snprintf(str,
+		       len,
+		       VMETA_SESSION_OVERLAY_HEADER_FOOTER_FORMAT,
+		       header_height,
+		       footer_height);
+
+	return (ssize_t)ret;
+}
+
+
+int vmeta_session_overlay_header_footer_read(const char *str,
+					     float *header_height,
+					     float *footer_height)
+{
+	int ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(header_height == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(footer_height == NULL, EINVAL);
+
+	ret = sscanf(str, "%f,%f", header_height, footer_height);
+
+	if (ret != 2)
+		return -EPROTO;
+
+	return 0;
+}
+
+
 ssize_t vmeta_session_thermal_alignment_write(
 	char *str,
 	size_t len,
@@ -455,6 +585,53 @@ int vmeta_session_thermal_scale_factor_read(const char *str, double *value)
 }
 
 
+ssize_t vmeta_session_principal_point_write(
+	char *str,
+	size_t len,
+	const struct vmeta_principal_point *principal_point)
+{
+	size_t ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(principal_point == NULL, EINVAL);
+
+	if (!principal_point->valid)
+		return 0;
+
+	ret = snprintf(str,
+		       len,
+		       VMETA_SESSION_PRINCIPAL_POINT_FORMAT,
+		       principal_point->position.x,
+		       principal_point->position.y);
+
+	return (ssize_t)ret;
+}
+
+
+int vmeta_session_principal_point_read(
+	const char *str,
+	struct vmeta_principal_point *principal_point)
+{
+	int ret;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(principal_point == NULL, EINVAL);
+
+	principal_point->valid = 1;
+	ret = sscanf(str,
+		     "%f,%f",
+		     &principal_point->position.x,
+		     &principal_point->position.y);
+	if (ret != 2) {
+		principal_point->position.x = 0.;
+		principal_point->position.y = 0.;
+		principal_point->valid = 0;
+	}
+
+	return 0;
+}
+
+
 int vmeta_session_streaming_sdes_write(
 	const struct vmeta_session *meta,
 	vmeta_session_streaming_sdes_write_cb_t cb,
@@ -491,6 +668,20 @@ int vmeta_session_streaming_sdes_write(
 			sizeof(loc),
 			VMETA_SESSION_LOCATION_ISO6709,
 			&meta->takeoff_loc);
+		if (ret > 0)
+			(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+			      loc,
+			      VMETA_STRM_SDES_KEY_TAKEOFF_LOC,
+			      userdata);
+	}
+
+	if (meta->location.valid) {
+		char loc[VMETA_SESSION_LOCATION_MAX_LEN];
+		ssize_t ret = vmeta_session_location_write(
+			loc,
+			sizeof(loc),
+			VMETA_SESSION_LOCATION_ISO6709,
+			&meta->location);
 		if (ret > 0)
 			(*cb)(VMETA_STRM_SDES_TYPE_LOC, loc, NULL, userdata);
 	}
@@ -640,6 +831,20 @@ int vmeta_session_streaming_sdes_write(
 		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
 		      vmeta_camera_type_to_str(meta->camera_type),
 		      VMETA_STRM_SDES_KEY_CAMERA_TYPE,
+		      userdata);
+	}
+
+	if (meta->camera_subtype != VMETA_CAMERA_SUBTYPE_UNKNOWN) {
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      vmeta_camera_subtype_to_str(meta->camera_subtype),
+		      VMETA_STRM_SDES_KEY_CAMERA_SUBTYPE,
+		      userdata);
+	}
+
+	if (meta->camera_spectrum != VMETA_CAMERA_SPECTRUM_UNKNOWN) {
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      vmeta_camera_spectrum_to_str(meta->camera_spectrum),
+		      VMETA_STRM_SDES_KEY_CAMERA_SPECTRUM,
 		      userdata);
 	}
 
@@ -798,6 +1003,57 @@ int vmeta_session_streaming_sdes_write(
 		}
 	}
 
+	if (meta->first_frame_capture_ts != 0) {
+		char conv[21];
+		snprintf(conv,
+			 sizeof(conv),
+			 "%" PRIu64,
+			 meta->first_frame_capture_ts);
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      conv,
+		      VMETA_STRM_SDES_KEY_FIRST_FRAME_CAPTURE_TS,
+		      userdata);
+	}
+
+	if (meta->first_frame_sample_index != 0) {
+		char conv[11];
+		snprintf(conv,
+			 sizeof(conv),
+			 "%" PRIu32,
+			 meta->first_frame_sample_index);
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      conv,
+		      VMETA_STRM_SDES_KEY_FIRST_FRAME_SAMPLE_INDEX,
+		      userdata);
+	}
+
+	if (meta->media_id != 0) {
+		char conv[11];
+		snprintf(conv, sizeof(conv), "%" PRIu32, meta->media_id);
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      conv,
+		      VMETA_STRM_SDES_KEY_MEDIA_ID,
+		      userdata);
+	}
+
+	if (meta->resource_index != 0) {
+		char conv[11];
+		snprintf(conv, sizeof(conv), "%" PRIu32, meta->resource_index);
+		(*cb)(VMETA_STRM_SDES_TYPE_PRIV,
+		      conv,
+		      VMETA_STRM_SDES_KEY_RESOURCE_INDEX,
+		      userdata);
+	}
+
+	if (meta->principal_point.valid) {
+		const char *key = VMETA_STRM_SDES_KEY_PRINCIPAL_POINT;
+		char conv[VMETA_SESSION_PRINCIPAL_POINT_MAX_LEN];
+		ssize_t ret = vmeta_session_principal_point_write(
+			conv, sizeof(conv), &meta->principal_point);
+		if (ret > 0)
+			(*cb)(VMETA_STRM_SDES_TYPE_PRIV, conv, key, userdata);
+	}
+
 	return 0;
 }
 
@@ -829,7 +1085,7 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 		break;
 
 	case VMETA_STRM_SDES_TYPE_LOC:
-		ret = vmeta_session_location_read(value, &meta->takeoff_loc);
+		ret = vmeta_session_location_read(value, &meta->location);
 		break;
 
 	case VMETA_STRM_SDES_TYPE_PRIV:
@@ -841,6 +1097,11 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_RUN_DATE) == 0) {
 			ret = vmeta_session_date_read(
 				value, &meta->run_date, &meta->run_date_gmtoff);
+
+		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_TAKEOFF_LOC) ==
+			   0) {
+			ret = vmeta_session_location_read(value,
+							  &meta->takeoff_loc);
 
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_RUN_ID) == 0) {
 			COPY_VALUE(meta->run_id, value);
@@ -907,10 +1168,6 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 			char metaversion[10];
 			COPY_VALUE(metaversion, value);
 			meta->thermal.metaversion = atoi(metaversion);
-			meta->has_thermal = ((meta->thermal.metaversion > 0) &&
-					     (meta->thermal.alignment.valid))
-						    ? 1
-						    : 0;
 
 		} else if (strcmp(prefix,
 				  VMETA_STRM_SDES_KEY_THERMAL_CAMSERIAL) == 0) {
@@ -920,10 +1177,6 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 				  VMETA_STRM_SDES_KEY_THERMAL_ALIGNMENT) == 0) {
 			ret = vmeta_session_thermal_alignment_read(
 				value, &meta->thermal.alignment);
-			meta->has_thermal = ((meta->thermal.metaversion > 0) &&
-					     (meta->thermal.alignment.valid))
-						    ? 1
-						    : 0;
 
 		} else if (strcmp(prefix,
 				  VMETA_STRM_SDES_KEY_THERMAL_CONV_LOW) == 0) {
@@ -944,6 +1197,16 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_CAMERA_TYPE) ==
 			   0) {
 			meta->camera_type = vmeta_camera_type_from_str(value);
+
+		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_CAMERA_SUBTYPE) ==
+			   0) {
+			meta->camera_subtype =
+				vmeta_camera_subtype_from_str(value);
+
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_CAMERA_SPECTRUM) == 0) {
+			meta->camera_spectrum =
+				vmeta_camera_spectrum_from_str(value);
 
 		} else if (strcmp(prefix,
 				  VMETA_STRM_SDES_KEY_CAMERA_SERIAL_NUMBER) ==
@@ -1002,8 +1265,24 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_TONE_MAPPING) ==
 			   0) {
 			meta->tone_mapping = vmeta_tone_mapping_from_str(value);
-		}
 
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_FIRST_FRAME_CAPTURE_TS) ==
+			   0) {
+			meta->first_frame_capture_ts = strtoull(value, NULL, 0);
+		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_MEDIA_ID) == 0) {
+			meta->media_id = strtoul(value, NULL, 0);
+		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_RESOURCE_INDEX) ==
+			   0) {
+			meta->resource_index = strtoul(value, NULL, 0);
+		} else if (strcmp(prefix,
+				  VMETA_STRM_SDES_KEY_PRINCIPAL_POINT) == 0) {
+			ret = vmeta_session_principal_point_read(
+				value, &meta->principal_point);
+		}
+		meta->has_thermal = (meta->thermal.metaversion > 0) ||
+				    (meta->thermal.alignment.valid) ||
+				    (meta->thermal.camserial[0] != '\0');
 		break;
 
 	default:
@@ -1194,6 +1473,21 @@ int vmeta_session_streaming_sdp_write(const struct vmeta_session *meta,
 		}
 	}
 
+	if ((!media_level) && (meta->location.valid)) {
+		char loc[VMETA_SESSION_LOCATION_MAX_LEN];
+		ssize_t ret = vmeta_session_location_write(
+			loc,
+			sizeof(loc),
+			VMETA_SESSION_LOCATION_ISO6709,
+			&meta->location);
+		if (ret > 0) {
+			(*cb)(VMETA_STRM_SDP_TYPE_SESSION_ATTR,
+			      loc,
+			      VMETA_STRM_SDP_KEY_LOCATION,
+			      userdata);
+		}
+	}
+
 	if ((!media_level) && (meta->video_mode != VMETA_VIDEO_MODE_UNKNOWN)) {
 		(*cb)(VMETA_STRM_SDP_TYPE_SESSION_ATTR,
 		      vmeta_video_mode_to_str(meta->video_mode),
@@ -1241,6 +1535,20 @@ int vmeta_session_streaming_sdp_write(const struct vmeta_session *meta,
 		(*cb)(type,
 		      vmeta_camera_type_to_str(meta->camera_type),
 		      VMETA_STRM_SDP_KEY_CAMERA_TYPE,
+		      userdata);
+	}
+
+	if (meta->camera_subtype != VMETA_CAMERA_SUBTYPE_UNKNOWN) {
+		(*cb)(type,
+		      vmeta_camera_subtype_to_str(meta->camera_subtype),
+		      VMETA_STRM_SDP_KEY_CAMERA_SUBTYPE,
+		      userdata);
+	}
+
+	if (meta->camera_spectrum != VMETA_CAMERA_SPECTRUM_UNKNOWN) {
+		(*cb)(type,
+		      vmeta_camera_spectrum_to_str(meta->camera_spectrum),
+		      VMETA_STRM_SDP_KEY_CAMERA_SPECTRUM,
 		      userdata);
 	}
 
@@ -1390,6 +1698,51 @@ int vmeta_session_streaming_sdp_write(const struct vmeta_session *meta,
 		(*cb)(type, "1", key, userdata);
 	}
 
+	if (meta->first_frame_capture_ts != 0) {
+		char conv[21];
+		snprintf(conv,
+			 sizeof(conv),
+			 "%" PRIu64,
+			 meta->first_frame_capture_ts);
+		(*cb)(type,
+		      conv,
+		      VMETA_STRM_SDP_KEY_FIRST_FRAME_CAPTURE_TS,
+		      userdata);
+	}
+
+	if (meta->first_frame_sample_index != 0) {
+		char conv[11];
+		snprintf(conv,
+			 sizeof(conv),
+			 "%" PRIu32,
+			 meta->first_frame_sample_index);
+		(*cb)(type,
+		      conv,
+		      VMETA_STRM_SDP_KEY_FIRST_FRAME_SAMPLE_INDEX,
+		      userdata);
+	}
+
+	if (meta->media_id != 0) {
+		char conv[11];
+		snprintf(conv, sizeof(conv), "%" PRIu32, meta->media_id);
+		(*cb)(type, conv, VMETA_STRM_SDP_KEY_MEDIA_ID, userdata);
+	}
+
+	if (meta->resource_index != 0) {
+		char conv[11];
+		snprintf(conv, sizeof(conv), "%" PRIu32, meta->resource_index);
+		(*cb)(type, conv, VMETA_STRM_SDP_KEY_RESOURCE_INDEX, userdata);
+	}
+
+	if (meta->principal_point.valid) {
+		const char *key = VMETA_STRM_SDP_KEY_PRINCIPAL_POINT;
+		char conv[VMETA_SESSION_PRINCIPAL_POINT_MAX_LEN];
+		ssize_t ret = vmeta_session_principal_point_write(
+			conv, sizeof(conv), &meta->principal_point);
+		if (ret > 0)
+			(*cb)(type, conv, key, userdata);
+	}
+
 	return 0;
 }
 
@@ -1480,6 +1833,10 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 			ret = vmeta_session_location_read(value,
 							  &meta->takeoff_loc);
 
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_LOCATION) == 0) {
+			ret = vmeta_session_location_read(value,
+							  &meta->location);
+
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_VIDEO_MODE) == 0) {
 			meta->video_mode = vmeta_video_mode_from_str(value);
 
@@ -1494,6 +1851,22 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_TONE_MAPPING) == 0) {
 			meta->tone_mapping = vmeta_tone_mapping_from_str(value);
+
+		} else if (strcmp(key,
+				  VMETA_STRM_SDP_KEY_FIRST_FRAME_CAPTURE_TS) ==
+			   0) {
+			meta->first_frame_capture_ts = strtoull(value, NULL, 0);
+		} else if (
+			strcmp(key,
+			       VMETA_STRM_SDP_KEY_FIRST_FRAME_SAMPLE_INDEX) ==
+			0) {
+			meta->first_frame_sample_index =
+				strtoul(value, NULL, 0);
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_MEDIA_ID) == 0) {
+			meta->media_id = strtoul(value, NULL, 0);
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_RESOURCE_INDEX) ==
+			   0) {
+			meta->resource_index = strtoul(value, NULL, 0);
 		}
 		/* fall through */
 	case VMETA_STRM_SDP_TYPE_MEDIA_ATTR:
@@ -1502,6 +1875,16 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_CAMERA_TYPE) == 0) {
 			meta->camera_type = vmeta_camera_type_from_str(value);
+
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_CAMERA_SUBTYPE) ==
+			   0) {
+			meta->camera_subtype =
+				vmeta_camera_subtype_from_str(value);
+
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_CAMERA_SPECTRUM) ==
+			   0) {
+			meta->camera_spectrum =
+				vmeta_camera_spectrum_from_str(value);
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_CAMERA_MODEL_TYPE) ==
 			   0) {
@@ -1548,10 +1931,6 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 			char metaversion[10];
 			COPY_VALUE(metaversion, value);
 			meta->thermal.metaversion = atoi(metaversion);
-			meta->has_thermal = ((meta->thermal.metaversion > 0) &&
-					     (meta->thermal.alignment.valid))
-						    ? 1
-						    : 0;
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_THERMAL_CAMSERIAL) ==
 			   0) {
@@ -1561,10 +1940,6 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 			   0) {
 			ret = vmeta_session_thermal_alignment_read(
 				value, &meta->thermal.alignment);
-			meta->has_thermal = ((meta->thermal.metaversion > 0) &&
-					     (meta->thermal.alignment.valid))
-						    ? 1
-						    : 0;
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_THERMAL_CONV_LOW) ==
 			   0) {
@@ -1584,7 +1959,14 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_DEFAULT_MEDIA) == 0) {
 			meta->default_media = 1;
+		} else if (strcmp(key, VMETA_STRM_SDP_KEY_PRINCIPAL_POINT) ==
+			   0) {
+			ret = vmeta_session_principal_point_read(
+				value, &meta->principal_point);
 		}
+		meta->has_thermal = (meta->thermal.metaversion > 0) ||
+				    (meta->thermal.alignment.valid) ||
+				    (meta->thermal.camserial[0] != '\0');
 		break;
 
 	default:
@@ -1666,17 +2048,7 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 
 	if (meta->takeoff_loc.valid) {
 		char loc[VMETA_SESSION_LOCATION_MAX_LEN];
-		ssize_t ret =
-			vmeta_session_location_write(loc,
-						     sizeof(loc),
-						     VMETA_SESSION_LOCATION_XYZ,
-						     &meta->takeoff_loc);
-		if (ret > 0)
-			(*cb)(VMETA_REC_XYZ,
-			      VMETA_REC_UDTA_KEY_TAKEOFF_LOC,
-			      loc,
-			      userdata);
-		ret = vmeta_session_location_write(
+		ssize_t ret = vmeta_session_location_write(
 			loc,
 			sizeof(loc),
 			VMETA_SESSION_LOCATION_ISO6709,
@@ -1684,6 +2056,30 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 		if (ret > 0)
 			(*cb)(VMETA_REC_META,
 			      VMETA_REC_META_KEY_TAKEOFF_LOC,
+			      loc,
+			      userdata);
+	}
+
+	if (meta->location.valid) {
+		char loc[VMETA_SESSION_LOCATION_MAX_LEN];
+		ssize_t ret =
+			vmeta_session_location_write(loc,
+						     sizeof(loc),
+						     VMETA_SESSION_LOCATION_XYZ,
+						     &meta->location);
+		if (ret > 0)
+			(*cb)(VMETA_REC_XYZ,
+			      VMETA_REC_UDTA_KEY_LOCATION,
+			      loc,
+			      userdata);
+		ret = vmeta_session_location_write(
+			loc,
+			sizeof(loc),
+			VMETA_SESSION_LOCATION_ISO6709,
+			&meta->location);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_LOCATION,
 			      loc,
 			      userdata);
 	}
@@ -1832,6 +2228,20 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 		      userdata);
 	}
 
+	if (meta->camera_subtype != VMETA_CAMERA_SUBTYPE_UNKNOWN) {
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_CAMERA_SUBTYPE,
+		      vmeta_camera_subtype_to_str(meta->camera_subtype),
+		      userdata);
+	}
+
+	if (meta->camera_spectrum != VMETA_CAMERA_SPECTRUM_UNKNOWN) {
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_CAMERA_SPECTRUM,
+		      vmeta_camera_spectrum_to_str(meta->camera_spectrum),
+		      userdata);
+	}
+
 	if (meta->camera_serial_number[0] != '\0') {
 		(*cb)(VMETA_REC_META,
 		      VMETA_REC_META_KEY_CAMERA_SERIAL_NUMBER,
@@ -1896,6 +2306,26 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 	default:
 		break;
 	}
+
+	switch (meta->overlay.type) {
+	case VMETA_OVERLAY_TYPE_HEADER_FOOTER: {
+		char header_footer[VMETA_SESSION_OVERLAY_HEADER_FOOTER_MAX_LEN];
+		ssize_t ret = vmeta_session_overlay_header_footer_write(
+			header_footer,
+			sizeof(header_footer),
+			meta->overlay.header_footer.header_height,
+			meta->overlay.header_footer.footer_height);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_HEADER_FOOTER,
+			      header_footer,
+			      userdata);
+		break;
+	}
+	default:
+		break;
+	}
+
 
 	if (meta->video_mode != VMETA_VIDEO_MODE_UNKNOWN) {
 		(*cb)(VMETA_REC_META,
@@ -1983,6 +2413,59 @@ int vmeta_session_recording_write(const struct vmeta_session *meta,
 				      conv,
 				      userdata);
 		}
+	}
+
+	if (meta->first_frame_capture_ts != 0) {
+		char conv[21];
+		snprintf(conv,
+			 sizeof(conv),
+			 "%" PRIu64,
+			 meta->first_frame_capture_ts);
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_FIRST_FRAME_CAPTURE_TS,
+		      conv,
+		      userdata);
+	}
+
+	if (meta->first_frame_sample_index != 0) {
+		char conv[11];
+		snprintf(conv,
+			 sizeof(conv),
+			 "%" PRIu32,
+			 meta->first_frame_sample_index);
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_FIRST_FRAME_SAMPLE_INDEX,
+		      conv,
+		      userdata);
+	}
+
+	if (meta->media_id != 0) {
+		char conv[11];
+		snprintf(conv, sizeof(conv), "%" PRIu32, meta->media_id);
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_MEDIA_ID,
+		      conv,
+		      userdata);
+	}
+
+	if (meta->resource_index != 0) {
+		char conv[11];
+		snprintf(conv, sizeof(conv), "%" PRIu32, meta->resource_index);
+		(*cb)(VMETA_REC_META,
+		      VMETA_REC_META_KEY_RESOURCE_INDEX,
+		      conv,
+		      userdata);
+	}
+
+	if (meta->principal_point.valid) {
+		char conv[VMETA_SESSION_PRINCIPAL_POINT_MAX_LEN];
+		ssize_t ret = vmeta_session_principal_point_write(
+			conv, sizeof(conv), &meta->principal_point);
+		if (ret > 0)
+			(*cb)(VMETA_REC_META,
+			      VMETA_REC_META_KEY_PRINCIPAL_POINT,
+			      conv,
+			      userdata);
 	}
 
 	return 0;
@@ -2102,6 +2585,9 @@ int vmeta_session_recording_read(const char *key,
 	} else if (strcmp(key, VMETA_REC_META_KEY_TAKEOFF_LOC) == 0) {
 		ret = vmeta_session_location_read(value, &meta->takeoff_loc);
 
+	} else if (strcmp(key, VMETA_REC_META_KEY_LOCATION) == 0) {
+		ret = vmeta_session_location_read(value, &meta->location);
+
 	} else if (strcmp(key, VMETA_REC_META_KEY_MAKER) == 0) {
 		COPY_VALUE(meta->maker, value);
 
@@ -2202,8 +2688,8 @@ int vmeta_session_recording_read(const char *key,
 		ret = vmeta_session_date_read(
 			value, &meta->media_date, &meta->media_date_gmtoff);
 
-	} else if ((strcmp(key, VMETA_REC_UDTA_KEY_TAKEOFF_LOC) == 0) &&
-		   (meta->takeoff_loc.valid == 0)) {
+	} else if ((strcmp(key, VMETA_REC_UDTA_KEY_LOCATION) == 0) &&
+		   (meta->location.valid == 0)) {
 		ret = vmeta_session_location_read(value, &meta->takeoff_loc);
 
 	} else if ((strcmp(key, VMETA_REC_UDTA_KEY_MAKER) == 0) &&
@@ -2226,10 +2712,6 @@ int vmeta_session_recording_read(const char *key,
 		char metaversion[10];
 		COPY_VALUE(metaversion, value);
 		meta->thermal.metaversion = atoi(metaversion);
-		meta->has_thermal = ((meta->thermal.metaversion > 0) &&
-				     (meta->thermal.alignment.valid))
-					    ? 1
-					    : 0;
 
 	} else if (strcmp(key, VMETA_REC_META_KEY_THERMAL_CAMSERIAL) == 0) {
 		COPY_VALUE(meta->thermal.camserial, value);
@@ -2237,10 +2719,6 @@ int vmeta_session_recording_read(const char *key,
 	} else if (strcmp(key, VMETA_REC_META_KEY_THERMAL_ALIGNMENT) == 0) {
 		ret = vmeta_session_thermal_alignment_read(
 			value, &meta->thermal.alignment);
-		meta->has_thermal = ((meta->thermal.metaversion > 0) &&
-				     (meta->thermal.alignment.valid))
-					    ? 1
-					    : 0;
 
 	} else if (strcmp(key, VMETA_REC_META_KEY_THERMAL_CONV_LOW) == 0) {
 		ret = vmeta_session_thermal_conversion_read(
@@ -2256,6 +2734,12 @@ int vmeta_session_recording_read(const char *key,
 
 	} else if (strcmp(key, VMETA_REC_META_KEY_CAMERA_TYPE) == 0) {
 		meta->camera_type = vmeta_camera_type_from_str(value);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_CAMERA_SUBTYPE) == 0) {
+		meta->camera_subtype = vmeta_camera_subtype_from_str(value);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_CAMERA_SPECTRUM) == 0) {
+		meta->camera_spectrum = vmeta_camera_spectrum_from_str(value);
 
 	} else if (strcmp(key, VMETA_REC_META_KEY_CAMERA_SERIAL_NUMBER) == 0) {
 		COPY_VALUE(meta->camera_serial_number, value);
@@ -2289,6 +2773,13 @@ int vmeta_session_recording_read(const char *key,
 			&meta->camera_model.fisheye.polynomial.p3,
 			&meta->camera_model.fisheye.polynomial.p4);
 
+	} else if (strcmp(key, VMETA_REC_META_KEY_HEADER_FOOTER) == 0) {
+		meta->overlay.type = VMETA_OVERLAY_TYPE_HEADER_FOOTER;
+		ret = vmeta_session_overlay_header_footer_read(
+			value,
+			&meta->overlay.header_footer.header_height,
+			&meta->overlay.header_footer.footer_height);
+
 	} else if (strcmp(key, VMETA_REC_META_KEY_VIDEO_MODE) == 0) {
 		meta->video_mode = vmeta_video_mode_from_str(value);
 
@@ -2301,7 +2792,24 @@ int vmeta_session_recording_read(const char *key,
 
 	} else if (strcmp(key, VMETA_REC_META_KEY_TONE_MAPPING) == 0) {
 		meta->tone_mapping = vmeta_tone_mapping_from_str(value);
+
+	} else if (strcmp(key, VMETA_REC_META_KEY_FIRST_FRAME_CAPTURE_TS) ==
+		   0) {
+		meta->first_frame_capture_ts = strtoull(value, NULL, 0);
+	} else if (strcmp(key, VMETA_REC_META_KEY_FIRST_FRAME_SAMPLE_INDEX) ==
+		   0) {
+		meta->first_frame_sample_index = strtoul(value, NULL, 0);
+	} else if (strcmp(key, VMETA_REC_META_KEY_MEDIA_ID) == 0) {
+		meta->media_id = strtoul(value, NULL, 0);
+	} else if (strcmp(key, VMETA_REC_META_KEY_RESOURCE_INDEX) == 0) {
+		meta->resource_index = strtoul(value, NULL, 0);
+	} else if (strcmp(key, VMETA_REC_META_KEY_PRINCIPAL_POINT) == 0) {
+		ret = vmeta_session_principal_point_read(
+			value, &meta->principal_point);
 	}
+	meta->has_thermal = (meta->thermal.metaversion > 0) ||
+			    (meta->thermal.alignment.valid) ||
+			    (meta->thermal.camserial[0] != '\0');
 
 	return ret;
 }
@@ -2403,6 +2911,9 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 			jobj, "takeoff_loc", &meta->takeoff_loc);
 	}
 
+	if (meta->location.valid)
+		vmeta_json_add_location(jobj, "location", &meta->location);
+
 	if ((meta->picture_fov.has_horz) || (meta->picture_fov.has_vert))
 		vmeta_json_add_fov(jobj, "picture_fov", &meta->picture_fov);
 
@@ -2412,6 +2923,20 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 		vmeta_json_add_str(jobj,
 				   "camera_type",
 				   vmeta_camera_type_to_str(meta->camera_type));
+	}
+
+	if (meta->camera_subtype != VMETA_CAMERA_SUBTYPE_UNKNOWN) {
+		vmeta_json_add_str(
+			jobj,
+			"camera_subtype",
+			vmeta_camera_subtype_to_str(meta->camera_subtype));
+	}
+
+	if (meta->camera_spectrum != VMETA_CAMERA_SPECTRUM_UNKNOWN) {
+		vmeta_json_add_str(
+			jobj,
+			"camera_spectrum",
+			vmeta_camera_spectrum_to_str(meta->camera_spectrum));
 	}
 
 	if (meta->camera_serial_number[0] != '\0') {
@@ -2487,6 +3012,38 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 		break;
 	}
 
+	switch (meta->overlay.type) {
+	case VMETA_OVERLAY_TYPE_HEADER_FOOTER: {
+		struct json_object *jobj_overlay = json_object_new_object();
+		struct json_object *jobj_header_footer =
+			json_object_new_object();
+		vmeta_json_add_str(
+			jobj_overlay,
+			"type",
+			vmeta_overlay_type_to_str(meta->overlay.type));
+		vmeta_json_add_double(
+			jobj_header_footer,
+			"header_height",
+			meta->overlay.header_footer.header_height);
+		vmeta_json_add_double(
+			jobj_header_footer,
+			"footer_height",
+			meta->overlay.header_footer.footer_height);
+		json_object_object_add(
+			jobj_overlay, "header_footer", jobj_header_footer);
+		json_object_object_add(jobj, "overlay", jobj_overlay);
+		break;
+	}
+	default:
+		break;
+	}
+
+	if (meta->principal_point.valid) {
+		vmeta_json_add_xy(jobj,
+				  "principal_point",
+				  &meta->principal_point.position);
+	}
+
 	if (meta->video_mode != VMETA_VIDEO_MODE_UNKNOWN)
 		vmeta_json_add_str(jobj,
 				   "video_mode",
@@ -2546,6 +3103,26 @@ int vmeta_session_to_json(const struct vmeta_session *meta,
 					      meta->thermal.scale_factor);
 		}
 		json_object_object_add(jobj, "thermal", jobj_thermal);
+	}
+
+	if (meta->first_frame_capture_ts != 0) {
+		vmeta_json_add_int64(jobj,
+				     "first_frame_capture_ts",
+				     meta->first_frame_capture_ts);
+	}
+
+	if (meta->first_frame_sample_index != 0) {
+		vmeta_json_add_int(jobj,
+				   "first_frame_sample_index",
+				   meta->first_frame_sample_index);
+	}
+
+	if (meta->media_id != 0)
+		vmeta_json_add_int(jobj, "media_id", meta->media_id);
+
+	if (meta->resource_index != 0) {
+		vmeta_json_add_int(
+			jobj, "resource_index", meta->resource_index);
 	}
 
 	return 0;
@@ -2750,6 +3327,22 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 		}
 	}
 
+	if (meta->location.valid) {
+		char loc[VMETA_SESSION_LOCATION_MAX_LEN];
+		ssize_t ret = vmeta_session_location_write(
+			loc,
+			sizeof(loc),
+			VMETA_SESSION_LOCATION_ISO6709,
+			&meta->location);
+		if (ret > 0) {
+			VMETA_STR_PRINT(str + len,
+					len,
+					maxlen - len,
+					"location: %s\n",
+					loc);
+		}
+	}
+
 	if ((meta->picture_fov.has_horz) && (meta->picture_fov.has_vert)) {
 		char fov[VMETA_SESSION_FOV_MAX_LEN];
 		ssize_t ret = vmeta_session_fov_write(
@@ -2771,6 +3364,24 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 				maxlen - len,
 				"camera_type: %s\n",
 				vmeta_camera_type_to_str(meta->camera_type));
+	}
+
+	if (meta->camera_subtype != VMETA_CAMERA_SUBTYPE_UNKNOWN) {
+		VMETA_STR_PRINT(
+			str + len,
+			len,
+			maxlen - len,
+			"camera_subtype: %s\n",
+			vmeta_camera_subtype_to_str(meta->camera_subtype));
+	}
+
+	if (meta->camera_spectrum != VMETA_CAMERA_SPECTRUM_UNKNOWN) {
+		VMETA_STR_PRINT(
+			str + len,
+			len,
+			maxlen - len,
+			"camera_spectrum: %s\n",
+			vmeta_camera_spectrum_to_str(meta->camera_spectrum));
 	}
 
 	if (meta->camera_serial_number[0] != '\0') {
@@ -2845,6 +3456,33 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 					"camera_model_"
 					"fisheye_polynomial: %s\n",
 					coef);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+
+	switch (meta->overlay.type) {
+	case VMETA_OVERLAY_TYPE_HEADER_FOOTER: {
+		char header_footer[VMETA_SESSION_OVERLAY_HEADER_FOOTER_MAX_LEN];
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"overlay_type: %s\n",
+				vmeta_overlay_type_to_str(meta->overlay.type));
+		ssize_t ret = vmeta_session_overlay_header_footer_write(
+			header_footer,
+			sizeof(header_footer),
+			meta->overlay.header_footer.header_height,
+			meta->overlay.header_footer.footer_height);
+		if (ret > 0) {
+			VMETA_STR_PRINT(str + len,
+					len,
+					maxlen - len,
+					"overlay_"
+					"header_footer: %s\n",
+					header_footer);
 		}
 		break;
 	}
@@ -2950,5 +3588,355 @@ int vmeta_session_to_str(const struct vmeta_session *meta,
 		}
 	}
 
+	if (meta->first_frame_capture_ts != 0) {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"first_frame_capture_ts: %" PRIu64 "\n",
+				meta->first_frame_capture_ts);
+	}
+
+	if (meta->first_frame_sample_index != 0) {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"first_frame_sample_index: %" PRIu32 "\n",
+				meta->first_frame_sample_index);
+	}
+
+	if (meta->media_id != 0) {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"media_id: %" PRIu32 "\n",
+				meta->media_id);
+	}
+
+	if (meta->resource_index != 0) {
+		VMETA_STR_PRINT(str + len,
+				len,
+				maxlen - len,
+				"resource_index: %" PRIu32 "\n",
+				meta->resource_index);
+	}
+
+	if (meta->principal_point.valid) {
+		VMETA_STR_PRINT(
+			str + len,
+			len,
+			maxlen - len,
+			"principal_point: " VMETA_SESSION_PRINCIPAL_POINT_FORMAT
+			"\n",
+			meta->principal_point.position.x,
+			meta->principal_point.position.y);
+	}
+
 	return 0;
+}
+
+
+static void
+fill_session_meta_with_identical_values(const struct vmeta_session *ref,
+					struct vmeta_session *ret)
+{
+	MERGE_META_STR(ret, ref, friendly_name);
+	MERGE_META_STR(ret, ref, maker);
+	MERGE_META_STR(ret, ref, model);
+	MERGE_META_STR(ret, ref, model_id);
+	MERGE_META_STR(ret, ref, serial_number);
+	MERGE_META_STR(ret, ref, software_version);
+	MERGE_META_STR(ret, ref, build_id);
+	MERGE_META_STR(ret, ref, title);
+	MERGE_META_STR(ret, ref, comment);
+	MERGE_META_STR(ret, ref, copyright);
+
+	MERGE_META_VAL(ret, ref, media_date, 0);
+	MERGE_META_VAL(ret, ref, media_date_gmtoff, 0);
+	MERGE_META_VAL(ret, ref, run_date, 0);
+	MERGE_META_VAL(ret, ref, run_date_gmtoff, 0);
+
+	MERGE_META_STR(ret, ref, run_id);
+
+	MERGE_META_VAL(ret, ref, boot_date, 0);
+	MERGE_META_VAL(ret, ref, boot_date_gmtoff, 0);
+
+	MERGE_META_STR(ret, ref, boot_id);
+
+	MERGE_META_VAL(ret, ref, flight_date, 0);
+	MERGE_META_VAL(ret, ref, flight_date_gmtoff, 0);
+
+	MERGE_META_STR(ret, ref, flight_id);
+	MERGE_META_STR(ret, ref, custom_id);
+
+	MERGE_META_PTR(&ret, &ref, takeoff_loc, sizeof(struct vmeta_location));
+	MERGE_META_PTR(&ret, &ref, location, sizeof(struct vmeta_location));
+	MERGE_META_PTR(&ret, &ref, picture_fov, sizeof(struct vmeta_fov));
+	MERGE_META_PTR(&ret, &ref, thermal, sizeof(struct vmeta_thermal));
+
+	if ((ret->has_thermal != ref->has_thermal) ||
+	    (memcmp(&ret->thermal,
+		    &ref->thermal,
+		    sizeof(struct vmeta_thermal)) != 0))
+		ret->has_thermal = 0;
+
+	MERGE_META_VAL(ret, ref, default_media, 0);
+
+	MERGE_META_VAL(ret, ref, camera_type, VMETA_CAMERA_TYPE_UNKNOWN);
+	MERGE_META_VAL(ret, ref, camera_subtype, VMETA_CAMERA_SUBTYPE_UNKNOWN);
+	MERGE_META_VAL(
+		ret, ref, camera_spectrum, VMETA_CAMERA_SPECTRUM_UNKNOWN);
+
+	MERGE_META_STR(ret, ref, camera_serial_number);
+	MERGE_META_PTR(
+		&ret, &ref, camera_model, sizeof(struct vmeta_camera_model));
+	MERGE_META_PTR(&ret, &ref, overlay, sizeof(struct vmeta_overlay));
+	MERGE_META_VAL(ret, ref, video_mode, VMETA_VIDEO_MODE_UNKNOWN);
+	MERGE_META_VAL(
+		ret, ref, video_stop_reason, VMETA_VIDEO_STOP_REASON_UNKNOWN);
+	MERGE_META_VAL(ret, ref, dynamic_range, VMETA_DYNAMIC_RANGE_UNKNOWN);
+	MERGE_META_VAL(ret, ref, tone_mapping, VMETA_TONE_MAPPING_UNKNOWN);
+	MERGE_META_VAL(ret, ref, first_frame_capture_ts, 0);
+	MERGE_META_VAL(ret, ref, first_frame_sample_index, 0);
+	MERGE_META_VAL(ret, ref, media_id, 0);
+	MERGE_META_VAL(ret, ref, resource_index, 0);
+
+	if ((ret->principal_point.valid != ref->principal_point.valid) ||
+	    (memcmp(&ret->principal_point.position,
+		    &ref->principal_point.position,
+		    sizeof(struct vmeta_xy)) != 0))
+		ret->principal_point.valid = 0;
+}
+
+
+static void
+erase_session_meta_with_identical_values(const struct vmeta_session *ref,
+					 struct vmeta_session *ret)
+{
+	REMOVE_DUPLICATE_META_STR(ret, ref, friendly_name);
+	REMOVE_DUPLICATE_META_STR(ret, ref, maker);
+	REMOVE_DUPLICATE_META_STR(ret, ref, model);
+	REMOVE_DUPLICATE_META_STR(ret, ref, model_id);
+	REMOVE_DUPLICATE_META_STR(ret, ref, serial_number);
+	REMOVE_DUPLICATE_META_STR(ret, ref, software_version);
+	REMOVE_DUPLICATE_META_STR(ret, ref, build_id);
+	REMOVE_DUPLICATE_META_STR(ret, ref, title);
+	REMOVE_DUPLICATE_META_STR(ret, ref, comment);
+	REMOVE_DUPLICATE_META_STR(ret, ref, copyright);
+
+	REMOVE_DUPLICATE_META_VAL(ret, ref, media_date, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, media_date_gmtoff, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, run_date, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, run_date_gmtoff, 0);
+
+	REMOVE_DUPLICATE_META_STR(ret, ref, run_id);
+
+	REMOVE_DUPLICATE_META_VAL(ret, ref, boot_date, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, boot_date_gmtoff, 0);
+
+	REMOVE_DUPLICATE_META_STR(ret, ref, boot_id);
+
+	REMOVE_DUPLICATE_META_VAL(ret, ref, flight_date, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, flight_date_gmtoff, 0);
+
+	REMOVE_DUPLICATE_META_STR(ret, ref, flight_id);
+	REMOVE_DUPLICATE_META_STR(ret, ref, custom_id);
+
+	REMOVE_DUPLICATE_META_VAL(ret, ref, takeoff_loc.valid, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, location.valid, 0);
+
+	if (ref->picture_fov.has_horz || ref->picture_fov.has_vert) {
+		ret->picture_fov.has_horz = 0;
+		ret->picture_fov.has_vert = 0;
+	}
+
+	if (ref->has_thermal)
+		ret->has_thermal = 0;
+
+	REMOVE_DUPLICATE_META_VAL(ret, ref, default_media, 0);
+
+	REMOVE_DUPLICATE_META_VAL(
+		ret, ref, camera_type, VMETA_CAMERA_TYPE_UNKNOWN);
+	REMOVE_DUPLICATE_META_VAL(
+		ret, ref, camera_subtype, VMETA_CAMERA_SUBTYPE_UNKNOWN);
+	REMOVE_DUPLICATE_META_VAL(
+		ret, ref, camera_spectrum, VMETA_CAMERA_SPECTRUM_UNKNOWN);
+
+	REMOVE_DUPLICATE_META_STR(ret, ref, camera_serial_number);
+	REMOVE_DUPLICATE_META_PTR(
+		&ret, &ref, camera_model, sizeof(struct vmeta_camera_model));
+	REMOVE_DUPLICATE_META_PTR(
+		&ret, &ref, overlay, sizeof(struct vmeta_overlay));
+	REMOVE_DUPLICATE_META_VAL(
+		ret, ref, video_stop_reason, VMETA_VIDEO_STOP_REASON_UNKNOWN);
+	REMOVE_DUPLICATE_META_VAL(
+		ret, ref, dynamic_range, VMETA_DYNAMIC_RANGE_UNKNOWN);
+	REMOVE_DUPLICATE_META_VAL(
+		ret, ref, tone_mapping, VMETA_TONE_MAPPING_UNKNOWN);
+
+	REMOVE_DUPLICATE_META_VAL(
+		ret, ref, video_mode, VMETA_VIDEO_MODE_UNKNOWN);
+
+	REMOVE_DUPLICATE_META_VAL(ret, ref, first_frame_capture_ts, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, first_frame_sample_index, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, media_id, 0);
+	REMOVE_DUPLICATE_META_VAL(ret, ref, resource_index, 0);
+
+	if (ref->principal_point.valid)
+		ret->principal_point.valid = 0;
+}
+
+
+int vmeta_session_merge_metadata(struct vmeta_session **meta_list,
+				 size_t meta_list_count,
+				 struct vmeta_session *merged_meta)
+{
+	ULOG_ERRNO_RETURN_ERR_IF(merged_meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(meta_list == NULL, EINVAL);
+
+	if (meta_list_count == 0)
+		return 0;
+
+	/* Copy first vmeta into merged_meta */
+	memcpy(merged_meta, meta_list[0], sizeof(*merged_meta));
+
+	/* First pass: remove different values from merged_meta */
+	for (size_t i = 1; i < meta_list_count; i++) {
+		if (meta_list[i] == NULL)
+			continue;
+		fill_session_meta_with_identical_values(meta_list[i],
+							merged_meta);
+	}
+
+	/* Second pass: remove identical values from meta_list */
+	for (size_t i = 0; i < meta_list_count; i++) {
+		if (meta_list[i] == NULL)
+			continue;
+		erase_session_meta_with_identical_values(merged_meta,
+							 meta_list[i]);
+	}
+
+	return 0;
+}
+
+
+static int vmeta_location_cmp(const struct vmeta_location *meta1,
+			      const struct vmeta_location *meta2)
+{
+	CMP_FIELD_VAL(meta1, meta2, valid);
+
+	if (meta1->valid == 0)
+		return 1;
+
+	CMP_FIELD_VAL(meta1, meta2, latitude);
+	CMP_FIELD_VAL(meta1, meta2, longitude);
+
+	CMP_FIELD_VAL_NAN_ALLOWED(meta1, meta2, altitude_wgs84ellipsoid);
+	CMP_FIELD_VAL_NAN_ALLOWED(meta1, meta2, altitude_egm96amsl);
+
+	CMP_FIELD_VAL(meta1, meta2, horizontal_accuracy);
+	CMP_FIELD_VAL(meta1, meta2, vertical_accuracy);
+	CMP_FIELD_VAL(meta1, meta2, sv_count);
+
+	return 1;
+}
+
+
+int vmeta_session_cmp(const struct vmeta_session *meta1,
+		      const struct vmeta_session *meta2)
+{
+	ULOG_ERRNO_RETURN_VAL_IF(meta1 == NULL && meta2 == NULL, EINVAL, 1);
+	ULOG_ERRNO_RETURN_VAL_IF(meta1 == NULL || meta2 == NULL, EINVAL, 0);
+
+	CMP_FIELD_STR(meta1, meta2, friendly_name);
+	CMP_FIELD_STR(meta1, meta2, maker);
+	CMP_FIELD_STR(meta1, meta2, model);
+	CMP_FIELD_STR(meta1, meta2, model_id);
+	CMP_FIELD_STR(meta1, meta2, serial_number);
+	CMP_FIELD_STR(meta1, meta2, software_version);
+	CMP_FIELD_STR(meta1, meta2, build_id);
+	CMP_FIELD_STR(meta1, meta2, title);
+	CMP_FIELD_STR(meta1, meta2, comment);
+	CMP_FIELD_STR(meta1, meta2, copyright);
+
+	CMP_FIELD_VAL(meta1, meta2, media_date);
+	CMP_FIELD_VAL(meta1, meta2, media_date_gmtoff);
+	CMP_FIELD_VAL(meta1, meta2, run_date);
+	CMP_FIELD_VAL(meta1, meta2, run_date_gmtoff);
+
+	CMP_FIELD_STR(meta1, meta2, run_id);
+
+	CMP_FIELD_VAL(meta1, meta2, boot_date);
+	CMP_FIELD_VAL(meta1, meta2, boot_date_gmtoff);
+
+	CMP_FIELD_STR(meta1, meta2, boot_id);
+
+	CMP_FIELD_VAL(meta1, meta2, flight_date);
+	CMP_FIELD_VAL(meta1, meta2, flight_date_gmtoff);
+
+	CMP_FIELD_STR(meta1, meta2, flight_id);
+	CMP_FIELD_STR(meta1, meta2, custom_id);
+
+	if (!vmeta_location_cmp(&meta1->takeoff_loc, &meta2->takeoff_loc))
+		return 0;
+
+	if (!vmeta_location_cmp(&meta1->location, &meta2->location))
+		return 0;
+
+	if (meta1->picture_fov.has_horz != meta2->picture_fov.has_horz)
+		return 0;
+	else if (meta1->picture_fov.has_horz &&
+		 meta1->picture_fov.horz != meta2->picture_fov.horz)
+		return 0;
+
+	if (meta1->picture_fov.has_vert != meta2->picture_fov.has_vert)
+		return 0;
+	else if (meta1->picture_fov.has_vert &&
+		 meta1->picture_fov.vert != meta2->picture_fov.vert)
+		return 0;
+
+	if (meta1->has_thermal != meta2->has_thermal)
+		return 0;
+	else if (meta1->has_thermal)
+		CMP_FIELD_PTR(meta1, meta2, thermal);
+
+	if (meta1->default_media != meta2->default_media)
+		return 0;
+	CMP_FIELD_VAL(meta1, meta2, camera_type);
+	CMP_FIELD_VAL(meta1, meta2, camera_subtype);
+	CMP_FIELD_VAL(meta1, meta2, camera_spectrum);
+
+	CMP_FIELD_STR(meta1, meta2, camera_serial_number);
+
+	CMP_FIELD_PTR(meta1, meta2, camera_model);
+	CMP_FIELD_PTR(meta1, meta2, overlay);
+	CMP_FIELD_VAL(meta1, meta2, video_mode);
+	CMP_FIELD_VAL(meta1, meta2, video_stop_reason);
+	CMP_FIELD_VAL(meta1, meta2, dynamic_range);
+	CMP_FIELD_VAL(meta1, meta2, tone_mapping);
+	CMP_FIELD_VAL(meta1, meta2, first_frame_capture_ts);
+	CMP_FIELD_VAL(meta1, meta2, first_frame_sample_index);
+	CMP_FIELD_VAL(meta1, meta2, media_id);
+	CMP_FIELD_VAL(meta1, meta2, resource_index);
+	if (meta1->principal_point.valid != meta2->principal_point.valid)
+		return 0;
+	else if (meta1->principal_point.valid)
+		CMP_FIELD_PTR(meta1, meta2, principal_point.position);
+	return 1;
+}
+
+
+int vmeta_session_is_valid(const struct vmeta_session *meta)
+{
+	ULOG_ERRNO_RETURN_VAL_IF(meta == NULL, EINVAL, 0);
+
+	if (meta->friendly_name[0] == '\0')
+		return 0;
+
+	if (strcmp(meta->maker, "Parrot") != 0)
+		return 0;
+
+	if (meta->model[0] == '\0')
+		return 0;
+
+	return 1;
 }
