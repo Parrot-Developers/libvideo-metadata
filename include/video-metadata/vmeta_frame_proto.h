@@ -443,6 +443,17 @@ vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic);
 
 
 /**
+ * Get the UserMetadata part of a TimedMetadata (root metadata), creating it if
+ * required.
+ * @param meta: the TimedMetadata
+ * @param index: index of the UserMetadata to get
+ * @return A pointer to the UserMetadata, or NULL on error.
+ */
+VMETA_API Vmeta__UserMetadata *
+vmeta_frame_proto_get_user_by_index(Vmeta__TimedMetadata *meta, size_t index);
+
+
+/**
  * Enum converters
  */
 

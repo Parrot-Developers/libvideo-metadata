@@ -1121,6 +1121,46 @@ vmeta_frame_proto_get_lfic_by_index(Vmeta__TimedMetadata *meta, size_t index)
 }
 
 
+Vmeta__UserMetadata *
+vmeta_frame_proto_get_user_by_index(Vmeta__TimedMetadata *meta, size_t index)
+{
+	Vmeta__UserMetadata *user, **tmp;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
+	ULOG_ERRNO_RETURN_VAL_IF(index > meta->n_user, EINVAL, NULL);
+
+	if (!meta->user) {
+		meta->user = calloc(1, sizeof(*meta->user));
+		if (!meta->user) {
+			ULOG_ERRNO("calloc", ENOMEM);
+			return NULL;
+		}
+		meta->n_user = 0;
+	}
+
+	if (meta->n_user > index)
+		return meta->user[index];
+
+	user = calloc(1, sizeof(*user));
+	if (!user) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__user_metadata__init(user);
+
+	tmp = realloc(meta->user, (index + 1) * sizeof(user));
+	if (!tmp) {
+		vmeta__user_metadata__free_unpacked(user, NULL);
+		return NULL;
+	}
+	meta->n_user = index + 1;
+	meta->user = tmp;
+	meta->user[index] = user;
+
+	return user;
+}
+
+
 Vmeta__Location *vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic)
 {
 	Vmeta__Location *location;

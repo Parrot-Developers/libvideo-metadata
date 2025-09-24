@@ -745,6 +745,26 @@ message LFICMetadata {
 
 	/* Type of the LFIC */
 	LficType type = 5;
+
+	/* Horizontal tangantial location accuracy (m), zero means unknown */
+	float horizontal_tangential_accuracy = 6;
+
+	/* Horizontal radial location accuracy (m), zero means unknown */
+	float horizontal_radial_accuracy = 7;
+}
+
+message UserMetadata {
+	/* Jenkins's one_at_a_time hash of the unique identifier of the
+	 * metadata producer; should be for example the UID of an
+	 * Air SDK mission (e.g. "com.parrot.missions.samples.hello") */
+	uint32 uid_hash = 1;
+
+	/* Associated frame capture timestamp (us, monotonic)
+	 * note: may be different from the timestamp in CameraMetadata */
+	uint64 timestamp = 2;
+
+	/* User-defined metadata payload */
+	bytes data = 3;
 }
 
 message CameraModel {
@@ -877,6 +897,9 @@ message TimedMetadata {
 
 	/* Location From Image Coordinates (LFIC) metadata */
 	repeated LFICMetadata lfic = 8;
+
+	/* User defined metadata */
+	repeated UserMetadata user = 9;
 }
 
 message SessionMetadata {

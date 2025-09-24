@@ -115,6 +115,93 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 }
 
 
+static inline char encode_char(unsigned val)
+{
+	if (val <= 25)
+		return 'A' + val;
+	else if (val <= 51)
+		return 'a' + val - 26;
+	else if (val <= 61)
+		return '0' + val - 52;
+	else if (val == 62)
+		return '+';
+	else
+		return '/';
+}
+
+
+int vmeta_base64_encode(const void *data, size_t size, char **out)
+{
+	ULOG_ERRNO_RETURN_ERR_IF(data == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(size == 0, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(out == NULL, EINVAL);
+
+	const uint8_t *_data = (const uint8_t *)data;
+	size_t out_size = (size / 3) * 4 + ((size % 3) ? 4 : 0);
+	char *_out = calloc(out_size + 1, sizeof(char));
+	ULOG_ERRNO_RETURN_ERR_IF(_out == NULL, ENOMEM);
+
+	size_t i;
+	char *t = _out;
+	for (i = 0; i < (size / 3) * 3; i += 3) {
+		uint8_t x1 = _data[i];
+		uint8_t x2 = _data[i + 1];
+		uint8_t x3 = _data[i + 2];
+		*t++ = encode_char(x1 >> 2);
+		*t++ = encode_char((x1 << 4 | x2 >> 4) & 0x3f);
+		*t++ = encode_char((x2 << 2 | x3 >> 6) & 0x3f);
+		*t++ = encode_char(x3 & 0x3f);
+	}
+
+	switch (size % 3) {
+	default:
+		break;
+	case 1: {
+		uint8_t x1 = _data[i];
+		*t++ = encode_char(x1 >> 2);
+		*t++ = encode_char((x1 << 4) & 0x3f);
+		*t++ = '=';
+		*t++ = '=';
+		break;
+	}
+	case 2: {
+		uint8_t x1 = _data[i];
+		uint8_t x2 = _data[i + 1];
+		*t++ = encode_char(x1 >> 2);
+		*t++ = encode_char((x1 << 4 | x2 >> 4) & 0x3f);
+		*t++ = encode_char((x2 << 2) & 0x3f);
+		*t++ = '=';
+		break;
+	}
+	}
+
+	/* String is already null-terminated (calloc) */
+	*out = _out;
+	return 0;
+}
+
+
+int vmeta_hash_joaat_str(const char *str, uint32_t *hash)
+{
+	uint32_t _hash = 0;
+
+	ULOG_ERRNO_RETURN_ERR_IF(str == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(hash == NULL, EINVAL);
+
+	while (*str) {
+		_hash += *str++;
+		_hash += (_hash << 10);
+		_hash ^= (_hash >> 6);
+	}
+	_hash += (_hash << 3);
+	_hash ^= (_hash >> 11);
+	_hash += (_hash << 15);
+
+	*hash = _hash;
+	return 0;
+}
+
+
 int vmeta_frame_get_location(struct vmeta_frame *meta,
 			     struct vmeta_location *loc)
 {
@@ -1776,7 +1863,9 @@ int vmeta_frame_get_lfic(struct vmeta_frame *meta,
 			 float *x,
 			 float *y,
 			 double *estimated_precision,
-			 double *grid_precision)
+			 double *grid_precision,
+			 float *horizontal_tangential_accuracy,
+			 float *horizontal_radial_accuracy)
 {
 	return vmeta_frame_get_lfic_by_type(meta,
 					    VMETA_LFIC_TYPE_COT,
@@ -1784,7 +1873,9 @@ int vmeta_frame_get_lfic(struct vmeta_frame *meta,
 					    x,
 					    y,
 					    estimated_precision,
-					    grid_precision);
+					    grid_precision,
+					    horizontal_tangential_accuracy,
+					    horizontal_radial_accuracy);
 }
 
 
@@ -1794,7 +1885,9 @@ int vmeta_frame_get_lfic_by_type(struct vmeta_frame *meta,
 				 float *x,
 				 float *y,
 				 double *estimated_precision,
-				 double *grid_precision)
+				 double *grid_precision,
+				 float *horizontal_tangential_accuracy,
+				 float *horizontal_radial_accuracy)
 {
 	int res = 0;
 	const Vmeta__TimedMetadata *tm;
@@ -1804,13 +1897,18 @@ int vmeta_frame_get_lfic_by_type(struct vmeta_frame *meta,
 	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(x == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(y == NULL, EINVAL);
-	ULOG_ERRNO_RETURN_ERR_IF(estimated_precision == NULL, EINVAL);
-	ULOG_ERRNO_RETURN_ERR_IF(grid_precision == NULL, EINVAL);
+
 	memset(loc, 0, sizeof(*loc));
 	*x = 0.f;
 	*y = 0.f;
-	*estimated_precision = 0.;
-	*grid_precision = 0.;
+	if (estimated_precision != NULL)
+		*estimated_precision = 0.;
+	if (grid_precision != NULL)
+		*grid_precision = 0.;
+	if (horizontal_tangential_accuracy != NULL)
+		*horizontal_tangential_accuracy = 0.;
+	if (horizontal_radial_accuracy != NULL)
+		*horizontal_radial_accuracy = 0.;
 
 	switch (meta->type) {
 	case VMETA_FRAME_TYPE_NONE:
@@ -1829,8 +1927,12 @@ int vmeta_frame_get_lfic_by_type(struct vmeta_frame *meta,
 		*loc = meta->v3.lfic.target_location;
 		*x = meta->v3.lfic.target_x;
 		*y = meta->v3.lfic.target_y;
-		*estimated_precision = meta->v3.lfic.estimated_precision;
-		*grid_precision = meta->v3.lfic.grid_precision;
+		if (estimated_precision != NULL) {
+			*estimated_precision =
+				meta->v3.lfic.estimated_precision;
+		}
+		if (grid_precision != NULL)
+			*grid_precision = meta->v3.lfic.grid_precision;
 		break;
 
 	case VMETA_FRAME_TYPE_PROTO:
@@ -1867,14 +1969,26 @@ int vmeta_frame_get_lfic_by_type(struct vmeta_frame *meta,
 			loc->longitude = tm->lfic[index]->location->longitude;
 			loc->sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
 			loc->valid = 1;
-			*estimated_precision =
-				tm->lfic[index]->location->horizontal_accuracy;
+			if (estimated_precision != NULL) {
+				*estimated_precision =
+					tm->lfic[index]
+						->location->horizontal_accuracy;
+			}
 		} else {
 			loc->valid = 0;
 		}
 		*x = tm->lfic[index]->x;
 		*y = tm->lfic[index]->y;
-		*grid_precision = tm->lfic[index]->grid_precision;
+		if (grid_precision != NULL)
+			*grid_precision = tm->lfic[index]->grid_precision;
+		if (horizontal_tangential_accuracy != NULL) {
+			*horizontal_tangential_accuracy =
+				tm->lfic[index]->horizontal_tangential_accuracy;
+		}
+		if (horizontal_radial_accuracy != NULL) {
+			*horizontal_radial_accuracy =
+				tm->lfic[index]->horizontal_radial_accuracy;
+		}
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
@@ -1934,9 +2048,11 @@ int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
 				  struct vmeta_location *loc,
 				  float *x,
 				  float *y,
+				  enum vmeta_lfic_type *type,
 				  double *estimated_precision,
 				  double *grid_precision,
-				  enum vmeta_lfic_type *type)
+				  float *horizontal_tangential_accuracy,
+				  float *horizontal_radial_accuracy)
 {
 	int res = 0;
 	const Vmeta__TimedMetadata *tm;
@@ -1944,13 +2060,19 @@ int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
 	ULOG_ERRNO_RETURN_ERR_IF(loc == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(x == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(y == NULL, EINVAL);
-	ULOG_ERRNO_RETURN_ERR_IF(estimated_precision == NULL, EINVAL);
-	ULOG_ERRNO_RETURN_ERR_IF(grid_precision == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(type == NULL, EINVAL);
+
 	memset(loc, 0, sizeof(*loc));
 	*x = 0.f;
 	*y = 0.f;
-	*estimated_precision = 0.;
-	*grid_precision = 0.;
+	if (estimated_precision != NULL)
+		*estimated_precision = 0.;
+	if (grid_precision != NULL)
+		*grid_precision = 0.;
+	if (horizontal_tangential_accuracy != NULL)
+		*horizontal_tangential_accuracy = 0.;
+	if (horizontal_radial_accuracy != NULL)
+		*horizontal_radial_accuracy = 0.;
 
 	switch (meta->type) {
 	case VMETA_FRAME_TYPE_NONE:
@@ -1967,8 +2089,12 @@ int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
 		*loc = meta->v3.lfic.target_location;
 		*x = meta->v3.lfic.target_x;
 		*y = meta->v3.lfic.target_y;
-		*estimated_precision = meta->v3.lfic.estimated_precision;
-		*grid_precision = meta->v3.lfic.grid_precision;
+		if (estimated_precision != NULL) {
+			*estimated_precision =
+				meta->v3.lfic.estimated_precision;
+		}
+		if (grid_precision != NULL)
+			*grid_precision = meta->v3.lfic.grid_precision;
 		*type = VMETA_LFIC_TYPE_COT;
 		break;
 
@@ -1995,14 +2121,26 @@ int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
 			loc->longitude = tm->lfic[index]->location->longitude;
 			loc->sv_count = VMETA_LOCATION_INVALID_SV_COUNT;
 			loc->valid = 1;
-			*estimated_precision =
-				tm->lfic[index]->location->horizontal_accuracy;
+			if (estimated_precision != NULL) {
+				*estimated_precision =
+					tm->lfic[index]
+						->location->horizontal_accuracy;
+			}
 		} else {
 			loc->valid = 0;
 		}
 		*x = tm->lfic[index]->x;
 		*y = tm->lfic[index]->y;
-		*grid_precision = tm->lfic[index]->grid_precision;
+		if (grid_precision != NULL)
+			*grid_precision = tm->lfic[index]->grid_precision;
+		if (horizontal_tangential_accuracy != NULL) {
+			*horizontal_tangential_accuracy =
+				tm->lfic[index]->horizontal_tangential_accuracy;
+		}
+		if (horizontal_radial_accuracy != NULL) {
+			*horizontal_radial_accuracy =
+				tm->lfic[index]->horizontal_radial_accuracy;
+		}
 		*type = vmeta_frame_lfic_type_proto_to_vmeta(
 			tm->lfic[index]->type);
 		vmeta_frame_proto_release_unpacked(meta, tm);

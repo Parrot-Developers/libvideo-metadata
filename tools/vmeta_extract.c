@@ -417,8 +417,8 @@ static int mp4_extract(struct vmeta_extract *self)
 	struct mp4_track_info tk;
 	struct mp4_track_sample sample;
 	int ret = 0, i, count, err, found = 0, meta_found = 0;
-	unsigned int id;
-	uint8_t data[BUF_SIZE];
+	unsigned int id, data_capacity = 0;
+	uint8_t *data = NULL;
 	struct vmeta_buffer buf;
 	char *mime_format = NULL;
 	uint64_t duration_us = 0;
@@ -480,14 +480,34 @@ static int mp4_extract(struct vmeta_extract *self)
 	/* Get the samples and process them */
 	i = 0;
 	do {
+		/* Retrieve metadata size */
 		err = mp4_demux_get_track_sample(
-			demux, id, 1, NULL, 0, data, BUF_SIZE, &sample);
+			demux, id, 0, NULL, 0, NULL, 0, &sample);
 		if (err < 0) {
 			ULOG_ERRNO("mp4_demux_get_track_sample", -err);
-			continue;
+			break;
 		}
 		if (sample.metadata_size == 0)
-			continue;
+			goto next_sample;
+		/* Allocate or realloc meta buffer */
+		if (data_capacity < sample.metadata_size) {
+			uint8_t *tmp = realloc(data, sample.metadata_size);
+			if (tmp == NULL) {
+				err = -ENOMEM;
+				ULOG_ERRNO("realloc", -err);
+				break;
+			}
+			data = tmp;
+			data_capacity = sample.metadata_size;
+		}
+		err = mp4_demux_get_track_sample(
+			demux, id, 1, NULL, 0, data, data_capacity, &sample);
+		if (err < 0) {
+			ULOG_ERRNO("mp4_demux_get_track_sample", -err);
+			break;
+		}
+		if (sample.metadata_size == 0)
+			goto next_sample;
 		vmeta_buffer_set_cdata(&buf, data, sample.metadata_size, 0);
 		err = frame_extract(
 			self,
@@ -498,6 +518,15 @@ static int mp4_extract(struct vmeta_extract *self)
 			ret = err;
 			break;
 		}
+		/* clang-format off */
+next_sample:
+		/* clang-format on */
+		err = mp4_demux_get_track_sample(
+			demux, id, 1, NULL, 0, NULL, 0, &sample);
+		if (err < 0) {
+			ULOG_ERRNO("mp4_demux_get_track_sample", -err);
+			break;
+		}
 		i++;
 	} while (sample.size);
 
@@ -505,6 +534,7 @@ cleanup:
 	if (demux)
 		mp4_demux_close(demux);
 	free(mime_format);
+	free(data);
 
 	return ret;
 }

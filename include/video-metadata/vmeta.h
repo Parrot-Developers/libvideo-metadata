@@ -457,6 +457,16 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 
 
 /**
+ * Compute the Jenkins's one_at_a_time hash-value for a NULL-terminated string.
+ * @param str: string to hash
+ * @param hash: pointer to the hash-value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_hash_joaat_str(const char *str, uint32_t *hash);
+
+
+/**
  * Get an enum vmeta_camera_type value from a string.
  * Valid strings are only the suffix of the camera type (eg. 'FRONT').
  * The case is ignored.

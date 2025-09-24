@@ -56,6 +56,11 @@ int vmeta_json_proto_add_timed_metadata(struct json_object *jobj,
 			     (union array_element_type *)timed->lfic,
 			     timed->n_lfic,
 			     vmeta_json_proto_add_lfic_metadata);
+	vmeta_json_add_array(jobj,
+			     "user",
+			     (union array_element_type *)timed->user,
+			     timed->n_user,
+			     vmeta_json_proto_add_user_metadata);
 out:
 	return res;
 }
@@ -563,19 +568,69 @@ void vmeta_json_proto_add_lfic_metadata(struct json_object *jobj,
 		vmeta_json_proto_add_location(
 			jobj_lfic, "location", lfic->location);
 	}
-	vmeta_json_add_double(
-		jobj_lfic, "grid_precision", lfic->grid_precision);
+	if (lfic->grid_precision != 0.) {
+		vmeta_json_add_double(
+			jobj_lfic, "grid_precision", lfic->grid_precision);
+	}
 	vmeta_json_add_str(
 		jobj_lfic,
 		"type",
 		vmeta_lfic_type_str(
 			vmeta_frame_lfic_type_proto_to_vmeta(lfic->type)));
+	if (lfic->horizontal_tangential_accuracy != 0.) {
+		vmeta_json_add_double(jobj_lfic,
+				      "horizontal_tangential_accuracy",
+				      lfic->horizontal_tangential_accuracy);
+	}
+	if (lfic->horizontal_radial_accuracy != 0.) {
+		vmeta_json_add_double(jobj_lfic,
+				      "horizontal_radial_accuracy",
+				      lfic->horizontal_radial_accuracy);
+	}
 	if (json_object_get_type(jobj) == json_type_object)
 		json_object_object_add(jobj, name, jobj_lfic);
 	else if (json_object_get_type(jobj) == json_type_array)
 		json_object_array_add(jobj, jobj_lfic);
 	else
 		free(jobj_lfic);
+}
+
+
+void vmeta_json_proto_add_user_metadata(struct json_object *jobj,
+					const char *name,
+					const Vmeta__UserMetadata *user)
+{
+	struct json_object *jobj_user;
+	char *base64_data = NULL;
+	int err;
+
+	if (!user) {
+		ULOGD("No %s info", name);
+		return;
+	}
+	jobj_user = json_object_new_object();
+	vmeta_json_add_int64(jobj_user, "timestamp", user->timestamp);
+	vmeta_json_add_int(jobj_user, "uid_hash", user->uid_hash);
+	vmeta_json_add_int(jobj_user, "len", user->data.len);
+	if (user->data.data != NULL && user->data.len > 0) {
+		err = vmeta_base64_encode(
+			user->data.data, user->data.len, &base64_data);
+		if (err < 0) {
+			ULOG_ERRNO("vmeta_base64_encode", -err);
+		} else {
+			vmeta_json_add_str(
+				jobj_user, "base64_data", base64_data);
+		}
+		free(base64_data);
+	} else {
+		vmeta_json_add_str(jobj_user, "base64_data", "");
+	}
+	if (json_object_get_type(jobj) == json_type_object)
+		json_object_object_add(jobj, name, jobj_user);
+	else if (json_object_get_type(jobj) == json_type_array)
+		json_object_array_add(jobj, jobj_user);
+	else
+		free(jobj_user);
 }
 
 

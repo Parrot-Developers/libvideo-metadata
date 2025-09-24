@@ -1072,8 +1072,13 @@ int vmeta_frame_get_piloting_mode(struct vmeta_frame *meta,
  * @param x: pointer to the normalized horizontal image coordinate (output)
  * @param y: pointer to the normalized vertical image coordinate (output)
  * @param estimated_precision: pointer to the estimated precision of the
- *                             location in meters (output)
- * @param grid_precision: pointer to the grid precision in meters (output)
+ *                             location in meters (output, optional)
+ * @param grid_precision: pointer to the grid precision in meters
+ *                        (output, optional)
+ * @param horizontal_tangential_accuracy: pointer to the horizontal tangential
+ *                                        accuracy in meters (output, optional)
+ * @param horizontal_radial_accuracy: pointer to the horizontal radial accuracy
+ *                                    in meters (output, optional)
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
@@ -1082,7 +1087,9 @@ int vmeta_frame_get_lfic(struct vmeta_frame *meta,
 			 float *x,
 			 float *y,
 			 double *estimated_precision,
-			 double *grid_precision);
+			 double *grid_precision,
+			 float *horizontal_tangential_accuracy,
+			 float *horizontal_radial_accuracy);
 
 
 /**
@@ -1107,10 +1114,15 @@ VMETA_API int vmeta_frame_get_lfic_count(struct vmeta_frame *meta,
  * @param loc: pointer to a location structure (output)
  * @param x: pointer to the normalized horizontal image coordinate (output)
  * @param y: pointer to the normalized vertical image coordinate (output)
- * @param estimated_precision: pointer to the estimated precision of the
- *                             location in meters (output)
- * @param grid_precision: pointer to the grid precision in meters (output)
  * @param type: type of the lfic (output)
+ * @param estimated_precision: pointer to the estimated precision of the
+ *                             location in meters (output, optional)
+ * @param grid_precision: pointer to the grid precision in meters
+ *                        (output, optional)
+ * @param horizontal_tangential_accuracy: pointer to the horizontal tangential
+ *                                        accuracy in meters (output, optional)
+ * @param horizontal_radial_accuracy: pointer to the horizontal radial accuracy
+ *                                    in meters (output, optional)
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
@@ -1119,9 +1131,11 @@ int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
 				  struct vmeta_location *loc,
 				  float *x,
 				  float *y,
+				  enum vmeta_lfic_type *type,
 				  double *estimated_precision,
 				  double *grid_precision,
-				  enum vmeta_lfic_type *type);
+				  float *horizontal_tangential_accuracy,
+				  float *horizontal_radial_accuracy);
 
 /**
  * Get the first location from image coordinates data of a specific type from a
@@ -1137,6 +1151,10 @@ int vmeta_frame_get_lfic_by_index(struct vmeta_frame *meta,
  * @param estimated_precision: pointer to the estimated precision of the
  *                             location in meters (output)
  * @param grid_precision: pointer to the grid precision in meters (output)
+ * @param horizontal_tangential_accuracy: pointer to the horizontal tangential
+ *                                        accuracy in meters (output)
+ * @param horizontal_radial_accuracy: pointer to the horizontal radial accuracy
+ *                                    in meters (output)
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
@@ -1146,7 +1164,9 @@ int vmeta_frame_get_lfic_by_type(struct vmeta_frame *meta,
 				 float *x,
 				 float *y,
 				 double *estimated_precision,
-				 double *grid_precision);
+				 double *grid_precision,
+				 float *horizontal_tangential_accuracy,
+				 float *horizontal_radial_accuracy);
 
 
 /**

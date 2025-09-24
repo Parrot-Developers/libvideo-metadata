@@ -341,6 +341,9 @@ vmeta_read_f64_u32(struct vmeta_buffer *buf, double *v, uint32_t shift)
 }
 
 
+int vmeta_base64_encode(const void *data, size_t size, char **out);
+
+
 int vmeta_frame_ext_timestamp_write(
 	struct vmeta_buffer *buf,
 	const struct vmeta_frame_ext_timestamp *meta);

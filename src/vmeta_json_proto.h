@@ -33,6 +33,7 @@
  * of object_nester) */
 union array_element_type {
 	const Vmeta__LFICMetadata *lfic;
+	const Vmeta__UserMetadata *user;
 	const Vmeta__BoundingBox *bbox;
 	const Vmeta__LinkMetadata *link;
 	const Vmeta__StarfishLinkInfo *starfish_info;
@@ -155,6 +156,11 @@ void vmeta_json_proto_add_automation_metadata(
 void vmeta_json_proto_add_lfic_metadata(struct json_object *jobj,
 					const char *name,
 					const Vmeta__LFICMetadata *lfic);
+
+
+void vmeta_json_proto_add_user_metadata(struct json_object *jobj,
+					const char *name,
+					const Vmeta__UserMetadata *user);
 
 
 void vmeta_json_proto_add_thermal_spot(struct json_object *jobj,
