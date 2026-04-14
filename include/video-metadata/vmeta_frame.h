@@ -674,7 +674,7 @@ int vmeta_frame_get_speed_ned(struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_air_speed(struct vmeta_frame *meta, float *speed);
+int vmeta_frame_get_air_speed(const struct vmeta_frame *meta, float *speed);
 
 
 /**
@@ -871,7 +871,7 @@ int vmeta_frame_get_camera_principal_point(struct vmeta_frame *meta,
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_camera_pan(struct vmeta_frame *meta, float *pan);
+int vmeta_frame_get_camera_pan(const struct vmeta_frame *meta, float *pan);
 
 
 /**
@@ -884,7 +884,7 @@ int vmeta_frame_get_camera_pan(struct vmeta_frame *meta, float *pan);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_frame_get_camera_tilt(struct vmeta_frame *meta, float *tilt);
+int vmeta_frame_get_camera_tilt(const struct vmeta_frame *meta, float *tilt);
 
 
 /**
@@ -911,6 +911,19 @@ int vmeta_frame_get_exposure_time(struct vmeta_frame *meta, float *exp);
  */
 VMETA_API
 int vmeta_frame_get_gain(struct vmeta_frame *meta, uint16_t *gain);
+
+
+/**
+ * Get the frame ISO speed from a frame metadata structure.
+ * The function fills the iso value with the frame ISO speed if it is
+ * available according to the metadata type. If the frame ISO speed is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param iso: pointer to a frame ISO speed value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_iso_speed(struct vmeta_frame *meta, uint32_t *iso);
 
 
 /**
@@ -1221,6 +1234,66 @@ VMETA_API int vmeta_frame_get_thermal_mask(struct vmeta_frame *meta,
 VMETA_API int
 vmeta_frame_get_camera_subtype(struct vmeta_frame *meta,
 			       enum vmeta_camera_subtype *subtype);
+
+
+/**
+ * Photo-specific
+ */
+
+/**
+ * Get the frame black level from a frame metadata structure.
+ * The function fills the val value with the frame black level if it is
+ * available according to the metadata type. If the frame black level is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param val: pointer to a frame black level value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_black_level(struct vmeta_frame *meta, uint16_t *val);
+
+
+/**
+ * Get the frame white level from a frame metadata structure.
+ * The function fills the val value with the frame white level if it is
+ * available according to the metadata type. If the frame white level is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param val: pointer to a frame white level value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_white_level(struct vmeta_frame *meta, uint16_t *val);
+
+
+/**
+ * Get the frame color matrix from a frame metadata structure.
+ * The function fills the matrix array with the frame color matrix if it is
+ * available according to the metadata type. If the frame color matrix is not
+ * available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param matrix: pointer to a frame color matrix array (output)
+ * @param count: pointer to the size of the matrix array (input), and number of
+ *               elements (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_color_matrix(struct vmeta_frame *meta,
+				 double *matrix,
+				 size_t *count);
+
+/**
+ * Get the frame calibration illuminant 1 from a frame metadata structure.
+ * The function fills the val value with the frame calibration illuminant 1 if
+ * it is available according to the metadata type. If the frame calibration
+ * illuminant 1 is not available for the given type, -ENOENT is returned.
+ * @param meta: pointer to a frame metadata structure
+ * @param val: pointer to a frame calibration illuminant 1 value (output)
+ * @return 0 on success, negative errno value in case of error
+ */
+VMETA_API
+int vmeta_frame_get_calibration_illuminant_1(struct vmeta_frame *meta,
+					     uint16_t *val);
 
 
 #endif /* !_VMETA_FRAME_H_ */

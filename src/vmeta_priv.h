@@ -190,7 +190,7 @@ static inline int vmeta_write_i64(struct vmeta_buffer *buf, int64_t v)
 static inline int
 vmeta_write_f32_u16(struct vmeta_buffer *buf, float v, uint32_t shift)
 {
-	uint16_t u16 = (uint16_t)(v * (1 << shift));
+	uint16_t u16 = (uint16_t)(v * (float)(1 << shift));
 	return vmeta_write_u16(buf, u16);
 }
 
@@ -198,7 +198,7 @@ vmeta_write_f32_u16(struct vmeta_buffer *buf, float v, uint32_t shift)
 static inline int
 vmeta_write_f32_i16(struct vmeta_buffer *buf, float v, uint32_t shift)
 {
-	int16_t i16 = (int16_t)(v * (1 << shift));
+	int16_t i16 = (int16_t)(v * (float)(1 << shift));
 	return vmeta_write_i16(buf, i16);
 }
 
@@ -206,7 +206,7 @@ vmeta_write_f32_i16(struct vmeta_buffer *buf, float v, uint32_t shift)
 static inline int
 vmeta_write_f64_u32(struct vmeta_buffer *buf, double v, uint32_t shift)
 {
-	uint32_t u32 = (uint32_t)(v * (1 << shift));
+	uint32_t u32 = (uint32_t)(v * (float)(1 << shift));
 	return vmeta_write_u32(buf, u32);
 }
 
@@ -214,7 +214,7 @@ vmeta_write_f64_u32(struct vmeta_buffer *buf, double v, uint32_t shift)
 static inline int
 vmeta_write_f64_i32(struct vmeta_buffer *buf, double v, uint32_t shift)
 {
-	int32_t i32 = (int32_t)(v * (1 << shift));
+	int32_t i32 = (int32_t)(v * (float)(1 << shift));
 	return vmeta_write_i32(buf, i32);
 }
 
@@ -300,7 +300,7 @@ vmeta_read_f32_u16(struct vmeta_buffer *buf, float *v, uint32_t shift)
 	uint16_t u16 = 0;
 	res = vmeta_read_u16(buf, &u16);
 	if (res == 0)
-		*v = (float)u16 / (1 << shift);
+		*v = (float)u16 / (float)(1 << shift);
 	return res;
 }
 
@@ -312,7 +312,7 @@ vmeta_read_f32_i16(struct vmeta_buffer *buf, float *v, uint32_t shift)
 	int16_t i16 = 0;
 	res = vmeta_read_i16(buf, &i16);
 	if (res == 0)
-		*v = (float)i16 / (1 << shift);
+		*v = (float)i16 / (float)(1 << shift);
 	return res;
 }
 
@@ -394,7 +394,7 @@ int vmeta_frame_ext_lfic_read(struct vmeta_buffer *buf,
 int vmeta_frame_proto_init(struct vmeta_frame_proto **meta);
 
 
-int vmeta_frame_proto_read(struct vmeta_buffer *buf,
+int vmeta_frame_proto_read(const struct vmeta_buffer *buf,
 			   struct vmeta_frame_proto **meta);
 
 

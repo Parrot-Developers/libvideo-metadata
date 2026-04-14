@@ -431,6 +431,27 @@ vmeta_session_proto_get_fisheye_camera_model_affine_matrix(
 }
 
 
+Google__Protobuf__BoolValue *
+vmeta_session_proto_get_fisheye_camera_model_affine_matrix_symmetric(
+	Vmeta__CameraModel__FisheyeCameraModel__AffineMatrix *affine_matrix)
+{
+	Google__Protobuf__BoolValue *symmetric;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!affine_matrix, EINVAL, NULL);
+
+	if (affine_matrix->symmetric)
+		return affine_matrix->symmetric;
+	symmetric = calloc(1, sizeof(*symmetric));
+	if (!symmetric) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	google__protobuf__bool_value__init(symmetric);
+	affine_matrix->symmetric = symmetric;
+	return symmetric;
+}
+
+
 Vmeta__CameraModel__FisheyeCameraModel__Polynomial *
 vmeta_session_proto_get_fisheye_camera_model_polynomial(
 	Vmeta__CameraModel__FisheyeCameraModel *fisheye)
@@ -599,8 +620,8 @@ int vmeta_session_to_proto(const struct vmeta_session *meta,
 			goto out;
 		}
 		/* deg to rad */
-		fov->x = meta->picture_fov.horz * M_PI / 180.;
-		fov->y = meta->picture_fov.vert * M_PI / 180.;
+		fov->x = meta->picture_fov.horz * (float)M_PI / 180.f;
+		fov->y = meta->picture_fov.vert * (float)M_PI / 180.f;
 	}
 
 	if (meta->has_thermal) {
@@ -755,7 +776,6 @@ int vmeta_session_to_proto(const struct vmeta_session *meta,
 				*affine_matrix = NULL;
 			Vmeta__CameraModel__FisheyeCameraModel__Polynomial
 				*polynomial = NULL;
-
 			fisheye = vmeta_session_proto_get_fisheye_camera_model(
 				model);
 			if (fisheye == NULL) {
@@ -786,6 +806,25 @@ int vmeta_session_to_proto(const struct vmeta_session *meta,
 				meta->camera_model.fisheye.affine_matrix.e;
 			affine_matrix->f =
 				meta->camera_model.fisheye.affine_matrix.f;
+			if (meta->camera_model.fisheye.affine_matrix
+				    .symmetric_valid) {
+				Google__Protobuf__BoolValue *symmetric =
+					/* codecheck_ignore[LONG_LINE] */
+					vmeta_session_proto_get_fisheye_camera_model_affine_matrix_symmetric(
+						affine_matrix);
+				if (affine_matrix == NULL) {
+					res = -EPROTO;
+					ULOG_ERRNO(
+						"vmeta_session_proto_get_"
+						"fisheye_camera_model_"
+						"affine_matrix_symmetric",
+						-res);
+					goto out;
+				}
+				symmetric->value =
+					meta->camera_model.fisheye.affine_matrix
+						.symmetric;
+			}
 			polynomial =
 				/* codecheck_ignore[LONG_LINE] */
 				vmeta_session_proto_get_fisheye_camera_model_polynomial(
@@ -824,8 +863,7 @@ int vmeta_session_to_proto(const struct vmeta_session *meta,
 			goto out;
 		}
 
-		switch (meta->overlay.type) {
-		case VMETA_OVERLAY_TYPE_HEADER_FOOTER: {
+		if (meta->overlay.type == VMETA_OVERLAY_TYPE_HEADER_FOOTER) {
 			Vmeta__Overlay__HeaderFooter *header_footer = NULL;
 
 			header_footer =
@@ -843,9 +881,7 @@ int vmeta_session_to_proto(const struct vmeta_session *meta,
 				meta->overlay.header_footer.header_height;
 			header_footer->footer_height =
 				meta->overlay.header_footer.footer_height;
-			break;
-		}
-		default:
+		} else {
 			res = -ENOSYS;
 			ULOGE("unknown overlay type: %d", meta->overlay.type);
 			goto out;
@@ -872,6 +908,14 @@ int vmeta_session_to_proto(const struct vmeta_session *meta,
 	proto->video_stop_reason =
 		vmeta_session_video_stop_reason_vmeta_to_proto(
 			meta->video_stop_reason);
+
+	proto->photo_mode =
+		vmeta_session_photo_mode_vmeta_to_proto(meta->photo_mode);
+	proto->panorama_type =
+		vmeta_session_panorama_type_vmeta_to_proto(meta->panorama_type);
+	proto->photo_count = meta->photo_count;
+	proto->secure_cn = strdup(meta->secure_cn);
+
 	proto->dynamic_range =
 		vmeta_session_dynamic_range_vmeta_to_proto(meta->dynamic_range);
 	proto->tone_mapping =
@@ -983,8 +1027,9 @@ out:
 }
 
 
-int vmeta_session_proto_release_unpacked_rw(struct vmeta_session_proto *meta,
-					    Vmeta__SessionMetadata *proto_meta)
+int vmeta_session_proto_release_unpacked_rw(
+	struct vmeta_session_proto *meta,
+	const Vmeta__SessionMetadata *proto_meta)
 {
 	int ret = 0;
 
@@ -1244,6 +1289,112 @@ vmeta_session_dynamic_range_vmeta_to_proto(enum vmeta_dynamic_range range)
 }
 
 
+Vmeta__PhotoMode
+vmeta_session_photo_mode_vmeta_to_proto(enum vmeta_photo_mode mode)
+{
+	Vmeta__PhotoMode out = VMETA__PHOTO_MODE__PHOTO_MODE_UNKNOWN;
+	switch (mode) {
+	case VMETA_PHOTO_MODE_SINGLE:
+		out = VMETA__PHOTO_MODE__PM_SINGLE;
+		break;
+	case VMETA_PHOTO_MODE_BRACKETING:
+		out = VMETA__PHOTO_MODE__PM_BRACKETING;
+		break;
+	case VMETA_PHOTO_MODE_BURST:
+		out = VMETA__PHOTO_MODE__PM_BURST;
+		break;
+	case VMETA_PHOTO_MODE_TIMELAPSE:
+		out = VMETA__PHOTO_MODE__PM_TIMELAPSE;
+		break;
+	case VMETA_PHOTO_MODE_GPSLAPSE:
+		out = VMETA__PHOTO_MODE__PM_GPSLAPSE;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+enum vmeta_photo_mode
+vmeta_session_photo_mode_proto_to_vmeta(Vmeta__PhotoMode mode)
+{
+	enum vmeta_photo_mode out = VMETA_PHOTO_MODE_UNKNOWN;
+	switch (mode) {
+	case VMETA__PHOTO_MODE__PM_SINGLE:
+		out = VMETA_PHOTO_MODE_SINGLE;
+		break;
+	case VMETA__PHOTO_MODE__PM_BRACKETING:
+		out = VMETA_PHOTO_MODE_BRACKETING;
+		break;
+	case VMETA__PHOTO_MODE__PM_BURST:
+		out = VMETA_PHOTO_MODE_BURST;
+		break;
+	case VMETA__PHOTO_MODE__PM_TIMELAPSE:
+		out = VMETA_PHOTO_MODE_TIMELAPSE;
+		break;
+	case VMETA__PHOTO_MODE__PM_GPSLAPSE:
+		out = VMETA_PHOTO_MODE_GPSLAPSE;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+Vmeta__PanoramaType
+vmeta_session_panorama_type_vmeta_to_proto(enum vmeta_panorama_type type)
+{
+	Vmeta__PanoramaType out = VMETA__PANORAMA_TYPE__PT_UNKNOWN;
+	switch (type) {
+	case VMETA_PANORAMA_TYPE_NONE:
+		out = VMETA__PANORAMA_TYPE__PT_NONE;
+		break;
+	case VMETA_PANORAMA_TYPE_HORIZONTAL_180:
+		out = VMETA__PANORAMA_TYPE__PT_HORIZONTAL_180;
+		break;
+	case VMETA_PANORAMA_TYPE_VERTICAL_180:
+		out = VMETA__PANORAMA_TYPE__PT_VERTICAL_180;
+		break;
+	case VMETA_PANORAMA_TYPE_SPHERICAL:
+		out = VMETA__PANORAMA_TYPE__PT_SPHERICAL;
+		break;
+	case VMETA_PANORAMA_TYPE_SUPER_WIDE:
+		out = VMETA__PANORAMA_TYPE__PT_SUPER_WIDE;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
+
+
+enum vmeta_panorama_type
+vmeta_session_panorama_type_proto_to_vmeta(Vmeta__PanoramaType type)
+{
+	enum vmeta_panorama_type out = VMETA_PANORAMA_TYPE_UNKNOWN;
+	switch (type) {
+	case VMETA__PANORAMA_TYPE__PT_NONE:
+		out = VMETA_PANORAMA_TYPE_NONE;
+		break;
+	case VMETA__PANORAMA_TYPE__PT_HORIZONTAL_180:
+		out = VMETA_PANORAMA_TYPE_HORIZONTAL_180;
+		break;
+	case VMETA__PANORAMA_TYPE__PT_VERTICAL_180:
+		out = VMETA_PANORAMA_TYPE_VERTICAL_180;
+		break;
+	case VMETA__PANORAMA_TYPE__PT_SPHERICAL:
+		out = VMETA_PANORAMA_TYPE_SPHERICAL;
+		break;
+	case VMETA__PANORAMA_TYPE__PT_SUPER_WIDE:
+		out = VMETA_PANORAMA_TYPE_SUPER_WIDE;
+		break;
+	default:
+		break;
+	}
+	return out;
+}
 Vmeta__ToneMapping
 vmeta_session_tone_mapping_vmeta_to_proto(enum vmeta_tone_mapping mapping)
 {

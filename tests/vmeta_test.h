@@ -49,7 +49,7 @@
 		VMETA_ASSERT_BOTH_NULL_NOTNULL(p1, p2)                         \
 		if (!p1 || !p2)                                                \
 			return;                                                \
-	} while (0);
+	} while (0)
 
 #define MONKEY_TEST_COUNT 1000
 

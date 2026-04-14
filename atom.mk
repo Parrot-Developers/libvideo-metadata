@@ -8,7 +8,9 @@ LOCAL_CATEGORY_PATH := libs
 LOCAL_DESCRIPTION := protobuf generated code for libvideo-metadata
 LOCAL_EXPORT_C_INCLUDES := $(call local-get-build-dir)/generated
 LOCAL_C_INCLUDES := $(LOCAL_EXPORT_C_INCLUDES)
-LOCAL_LIBRARIES := protobuf-c
+LOCAL_LIBRARIES := \
+	libprotobuf-c-base \
+	protobuf-c
 LOCAL_CUSTOM_MACROS := \
 	protoc-c-macro:c,generated,$(LOCAL_PATH)/proto/vmeta.proto
 
@@ -44,17 +46,20 @@ LOCAL_SRC_FILES := \
 	src/vmeta_frame.c \
 	src/vmeta_json_proto.c \
 	src/vmeta_json.c \
+	src/vmeta_photo.c \
 	src/vmeta_proto.c \
 	src/vmeta_session_proto.c \
 	src/vmeta_session.c \
 	src/vmeta_utils.c
 
 LOCAL_LIBRARIES := \
-	libvideo-metadata-protobuf \
+	json \
 	libfutils \
+	libphoto-metadata-defs \
+	libprotobuf-c-base \
 	libulog \
-	protobuf-c \
-	json
+	libvideo-metadata-protobuf \
+	protobuf-c
 
 ifeq ("$(TARGET_OS)","windows")
   LOCAL_LDLIBS += -lws2_32

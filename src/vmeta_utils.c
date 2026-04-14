@@ -37,8 +37,21 @@ void vmeta_euler_to_quat(const struct vmeta_euler *euler,
 	if ((euler == NULL) || (quat == NULL))
 		return;
 
-	float c1, c2, c3, s1, s2, s3, psi, theta, phi;
-	float qw, qx, qy, qz, n;
+	float c1;
+	float c2;
+	float c3;
+	float s1;
+	float s2;
+	float s3;
+	float psi;
+	float theta;
+	float phi;
+	float qw;
+	float qx;
+	float qy;
+	float qz;
+	float n;
+
 	phi = euler->phi;
 	theta = euler->theta;
 	psi = euler->psi;
@@ -81,7 +94,16 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 		return;
 	}
 
-	float w, x, y, z, sqw, sqx, sqy, sqz, psign, s2;
+	float w;
+	float x;
+	float y;
+	float z;
+	float sqw;
+	float sqx;
+	float sqy;
+	float sqz;
+	float psign;
+	float s2;
 
 	w = quat->w;
 	x = quat->x;
@@ -97,12 +119,12 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 	/* Test singularities */
 	if (s2 < (-1.f + SINGULARITY_RADIUS)) {
 		euler->psi = 0.f;
-		euler->theta = -M_PI / 2.f;
+		euler->theta = (float)-M_PI / 2.f;
 		euler->phi = atan2f(2.f * (psign * z * y + w * x),
 				    sqw + sqy - sqz - sqx);
 	} else if (s2 > (1.f - SINGULARITY_RADIUS)) {
 		euler->psi = 0.f;
-		euler->theta = M_PI / 2.f;
+		euler->theta = (float)M_PI / 2.f;
 		euler->phi = atan2f(2.f * (psign * z * y + w * x),
 				    sqw + sqy - sqz - sqx);
 	} else {
@@ -115,7 +137,7 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 }
 
 
-static inline char encode_char(unsigned val)
+static inline char encode_char(unsigned char val)
 {
 	if (val <= 25)
 		return 'A' + val;
@@ -242,6 +264,11 @@ int vmeta_frame_get_location(struct vmeta_frame *meta,
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
+		if (tm->drone->location->sv_count > UINT8_MAX) {
+			res = -ERANGE;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
 		loc->altitude_wgs84ellipsoid =
 			tm->drone->location->altitude_wgs84ellipsoid;
 		if (loc->altitude_wgs84ellipsoid == 0.)
@@ -255,7 +282,7 @@ int vmeta_frame_get_location(struct vmeta_frame *meta,
 		loc->horizontal_accuracy =
 			tm->drone->location->horizontal_accuracy;
 		loc->vertical_accuracy = tm->drone->location->vertical_accuracy;
-		loc->sv_count = tm->drone->location->sv_count;
+		loc->sv_count = (uint8_t)tm->drone->location->sv_count;
 		loc->valid = 1;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
@@ -333,7 +360,7 @@ int vmeta_frame_get_speed_ned(struct vmeta_frame *meta, struct vmeta_ned *speed)
 }
 
 
-int vmeta_frame_get_air_speed(struct vmeta_frame *meta, float *speed)
+int vmeta_frame_get_air_speed(const struct vmeta_frame *meta, float *speed)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -982,6 +1009,11 @@ int vmeta_frame_get_camera_location(struct vmeta_frame *meta,
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
+		if (tm->camera->location->sv_count > UINT8_MAX) {
+			res = -ERANGE;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
 		loc->altitude_wgs84ellipsoid =
 			tm->camera->location->altitude_wgs84ellipsoid;
 		if (loc->altitude_wgs84ellipsoid == 0.)
@@ -996,7 +1028,7 @@ int vmeta_frame_get_camera_location(struct vmeta_frame *meta,
 			tm->camera->location->horizontal_accuracy;
 		loc->vertical_accuracy =
 			tm->camera->location->vertical_accuracy;
-		loc->sv_count = tm->camera->location->sv_count;
+		loc->sv_count = (uint8_t)tm->camera->location->sv_count;
 		loc->valid = 1;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
@@ -1056,7 +1088,7 @@ int vmeta_frame_get_camera_principal_point(struct vmeta_frame *meta,
 }
 
 
-int vmeta_frame_get_camera_pan(struct vmeta_frame *meta, float *pan)
+int vmeta_frame_get_camera_pan(const struct vmeta_frame *meta, float *pan)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -1096,7 +1128,7 @@ int vmeta_frame_get_camera_pan(struct vmeta_frame *meta, float *pan)
 }
 
 
-int vmeta_frame_get_camera_tilt(struct vmeta_frame *meta, float *tilt)
+int vmeta_frame_get_camera_tilt(const struct vmeta_frame *meta, float *tilt)
 {
 	int res = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -1234,9 +1266,93 @@ int vmeta_frame_get_gain(struct vmeta_frame *meta, uint16_t *gain)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		*gain = tm->camera->iso_gain;
+		if (tm->camera->iso_gain > UINT16_MAX) {
+			res = -ERANGE;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*gain = (uint16_t)tm->camera->iso_gain;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_iso_speed(struct vmeta_frame *meta, uint32_t *val)
+{
+	const Vmeta__TimedMetadata *tm = NULL;
+	int res = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(val == NULL, EINVAL);
+	*val = 0;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO:
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res == 0 && tm) {
+			if (tm->photo && tm->photo->iso_speed != 0)
+				*val = tm->photo->iso_speed;
+			else
+				res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+		}
+		break;
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_black_level(struct vmeta_frame *meta, uint16_t *val)
+{
+	int res = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(val == NULL, EINVAL);
+	*val = 0;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO: {
+		const Vmeta__TimedMetadata *tm = NULL;
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res == 0 && tm) {
+			if (tm->photo && tm->photo->raw_black_level != 0)
+				*val = (uint16_t)tm->photo->raw_black_level;
+			else
+				res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+		}
+		break;
+	}
 
 	default:
 		ULOGE("unknown metadata type: %u", meta->type);
@@ -1366,7 +1482,7 @@ int vmeta_frame_get_picture_h_fov(struct vmeta_frame *meta, float *fov)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		*fov = tm->camera->hfov * 180. / M_PI;
+		*fov = tm->camera->hfov * 180.f / (float)M_PI;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
@@ -1410,7 +1526,7 @@ int vmeta_frame_get_picture_v_fov(struct vmeta_frame *meta, float *fov)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		*fov = tm->camera->vfov * 180. / M_PI;
+		*fov = tm->camera->vfov * 180.f / (float)M_PI;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
@@ -1566,10 +1682,20 @@ int vmeta_frame_get_link_quality(struct vmeta_frame *meta, uint8_t *quality)
 		link = tm->links[0];
 		switch (link->protocol_case) {
 		case VMETA__LINK_METADATA__PROTOCOL_WIFI:
-			*quality = link->wifi->quality;
+			if (link->wifi->quality > UINT8_MAX) {
+				res = -ERANGE;
+				vmeta_frame_proto_release_unpacked(meta, tm);
+				goto out;
+			}
+			*quality = (uint8_t)link->wifi->quality;
 			break;
 		case VMETA__LINK_METADATA__PROTOCOL_STARFISH:
-			*quality = link->starfish->quality;
+			if (link->starfish->quality > UINT8_MAX) {
+				res = -ERANGE;
+				vmeta_frame_proto_release_unpacked(meta, tm);
+				goto out;
+			}
+			*quality = (uint8_t)link->starfish->quality;
 			break;
 		default:
 			res = -ENOENT;
@@ -1584,6 +1710,7 @@ int vmeta_frame_get_link_quality(struct vmeta_frame *meta, uint8_t *quality)
 		break;
 	}
 
+out:
 	return res;
 }
 
@@ -1645,7 +1772,12 @@ int vmeta_frame_get_wifi_rssi(struct vmeta_frame *meta, int8_t *rssi)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		*rssi = link->wifi->rssi;
+		if (link->wifi->rssi > INT8_MAX) {
+			res = -ERANGE;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*rssi = (int8_t)link->wifi->rssi;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
@@ -1701,7 +1833,12 @@ int vmeta_frame_get_battery_percentage(struct vmeta_frame *meta, uint8_t *bat)
 			vmeta_frame_proto_release_unpacked(meta, tm);
 			break;
 		}
-		*bat = tm->drone->battery_percentage;
+		if (tm->drone->battery_percentage > UINT8_MAX) {
+			res = -ERANGE;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+			break;
+		}
+		*bat = (uint8_t)tm->drone->battery_percentage;
 		vmeta_frame_proto_release_unpacked(meta, tm);
 		break;
 
@@ -2291,6 +2428,144 @@ int vmeta_frame_get_camera_subtype(struct vmeta_frame *meta,
 }
 
 
+int vmeta_frame_get_white_level(struct vmeta_frame *meta, uint16_t *val)
+{
+	int res = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(val == NULL, EINVAL);
+	*val = 0;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO: {
+		const Vmeta__TimedMetadata *tm = NULL;
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res == 0 && tm) {
+			if (tm->photo && tm->photo->raw_white_level != 0)
+				*val = (uint16_t)tm->photo->raw_white_level;
+			else
+				res = -ENOENT;
+			vmeta_frame_proto_release_unpacked(meta, tm);
+		}
+		break;
+	}
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_color_matrix(struct vmeta_frame *meta,
+				 double *matrix,
+				 size_t *count)
+{
+	int res = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(count == NULL, EINVAL);
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO: {
+		const Vmeta__TimedMetadata *tm = NULL;
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res == 0 && tm) {
+			if (tm->photo && tm->photo->n_color_matrix_1 > 0) {
+				if (matrix == NULL) {
+					*count = tm->photo->n_color_matrix_1;
+				} else if (*count <
+					   tm->photo->n_color_matrix_1) {
+					*count = tm->photo->n_color_matrix_1;
+					res = -ENOBUFS;
+				} else {
+					*count = tm->photo->n_color_matrix_1;
+					memcpy(matrix,
+					       tm->photo->color_matrix_1,
+					       tm->photo->n_color_matrix_1 *
+						       sizeof(double));
+				}
+			} else {
+				res = -ENOENT;
+			}
+			vmeta_frame_proto_release_unpacked(meta, tm);
+		}
+		break;
+	}
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
+int vmeta_frame_get_calibration_illuminant_1(struct vmeta_frame *meta,
+					     uint16_t *val)
+{
+	int res = 0;
+	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(val == NULL, EINVAL);
+	*val = 0;
+
+	switch (meta->type) {
+	case VMETA_FRAME_TYPE_NONE:
+	case VMETA_FRAME_TYPE_V1_STREAMING_BASIC:
+	case VMETA_FRAME_TYPE_V1_STREAMING_EXTENDED:
+	case VMETA_FRAME_TYPE_V1_RECORDING:
+	case VMETA_FRAME_TYPE_V2:
+	case VMETA_FRAME_TYPE_V3:
+		res = -ENOENT;
+		break;
+
+	case VMETA_FRAME_TYPE_PROTO: {
+		const Vmeta__TimedMetadata *tm = NULL;
+		res = vmeta_frame_proto_get_unpacked(meta, &tm);
+		if (res == 0 && tm) {
+			if (tm->photo &&
+			    tm->photo->calibration_illuminant_1 != 0) {
+				*val = (uint16_t)tm->photo
+					       ->calibration_illuminant_1;
+			} else {
+				res = -ENOENT;
+			}
+			vmeta_frame_proto_release_unpacked(meta, tm);
+		}
+		break;
+	}
+
+	default:
+		ULOGE("unknown metadata type: %u", meta->type);
+		res = -ENOSYS;
+		break;
+	}
+
+	return res;
+}
+
+
 enum vmeta_camera_type vmeta_camera_type_from_str(const char *str)
 {
 	if (str == NULL)
@@ -2406,6 +2681,105 @@ const char *vmeta_camera_subtype_to_str(enum vmeta_camera_subtype val)
 	default:
 		return "unknown";
 	}
+}
+
+
+#define CAMERA_MAP_ENTRY(_gen, _sub, _comb)                                    \
+	{                                                                      \
+		.generic = VMETA_CAMERA_TYPE_##_gen,                           \
+		.subtype = VMETA_CAMERA_SUBTYPE_##_sub,                        \
+		.combined = VMETA_CAMERA_TYPE_##_comb,                         \
+	}
+
+static const struct {
+	enum vmeta_camera_type generic;
+	enum vmeta_camera_subtype subtype;
+	enum vmeta_camera_type combined;
+} s_camera_type_map[] = {
+	/* clang-format off */
+	CAMERA_MAP_ENTRY(FRONT_STEREO,      LEFT,  FRONT_STEREO_LEFT),
+	CAMERA_MAP_ENTRY(FRONT_STEREO,      RIGHT, FRONT_STEREO_RIGHT),
+	CAMERA_MAP_ENTRY(HORIZONTAL_STEREO, LEFT,  HORIZONTAL_STEREO_LEFT),
+	CAMERA_MAP_ENTRY(HORIZONTAL_STEREO, RIGHT, HORIZONTAL_STEREO_RIGHT),
+	CAMERA_MAP_ENTRY(DOWN_STEREO,       LEFT,  DOWN_STEREO_LEFT),
+	CAMERA_MAP_ENTRY(DOWN_STEREO,       RIGHT, DOWN_STEREO_RIGHT),
+	/* clang-format on */
+};
+
+#undef CAMERA_MAP_ENTRY
+
+
+int vmeta_camera_type_split_subtype(enum vmeta_camera_type type,
+				    enum vmeta_camera_type *split_type,
+				    enum vmeta_camera_subtype *split_subtype)
+{
+	ULOG_ERRNO_RETURN_ERR_IF(!split_type, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(!split_subtype, EINVAL);
+
+	for (size_t i = 0; i < SIZEOF_ARRAY(s_camera_type_map); i++) {
+		if (s_camera_type_map[i].combined == type) {
+			*split_type = s_camera_type_map[i].generic;
+			*split_subtype = s_camera_type_map[i].subtype;
+			return 0;
+		}
+	}
+
+	*split_type = type;
+	*split_subtype = VMETA_CAMERA_SUBTYPE_UNKNOWN;
+	return -ENOENT;
+}
+
+
+int vmeta_camera_type_combine_subtype(
+	enum vmeta_camera_type type,
+	enum vmeta_camera_subtype subtype,
+	enum vmeta_camera_type *combined_type,
+	enum vmeta_camera_subtype *combined_subtype)
+{
+	ULOG_ERRNO_RETURN_ERR_IF(!combined_type, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(!combined_subtype, EINVAL);
+
+	for (size_t i = 0; i < SIZEOF_ARRAY(s_camera_type_map); i++) {
+		if (s_camera_type_map[i].generic == type &&
+		    s_camera_type_map[i].subtype == subtype) {
+			*combined_type = s_camera_type_map[i].combined;
+			*combined_subtype = VMETA_CAMERA_SUBTYPE_UNKNOWN;
+			return 0;
+		}
+	}
+
+	*combined_type = type;
+	*combined_subtype = subtype;
+	return -ENOENT;
+}
+
+
+int vmeta_camera_type_subtype_pair_cmp(enum vmeta_camera_type type1,
+				       enum vmeta_camera_subtype subtype1,
+				       enum vmeta_camera_type type2,
+				       enum vmeta_camera_subtype subtype2)
+{
+	int ret;
+	enum vmeta_camera_type tmp_type;
+	enum vmeta_camera_subtype tmp_subtype;
+
+	if (type1 == type2 && subtype1 == subtype2)
+		return 1;
+
+	ret = vmeta_camera_type_combine_subtype(
+		type1, subtype1, &tmp_type, &tmp_subtype);
+	if (ret == 0) {
+		type1 = tmp_type;
+		subtype1 = tmp_subtype;
+	}
+	ret = vmeta_camera_type_combine_subtype(
+		type2, subtype2, &tmp_type, &tmp_subtype);
+	if (ret == 0) {
+		type2 = tmp_type;
+		subtype2 = tmp_subtype;
+	}
+
+	return !!(type1 == type2 && subtype1 == subtype2);
 }
 
 
@@ -2568,6 +2942,85 @@ const char *vmeta_video_stop_reason_to_str(enum vmeta_video_stop_reason val)
 		return "shutdown";
 	case VMETA_VIDEO_STOP_REASON_INTERNAL_ERROR:
 		return "internal-error";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_photo_mode vmeta_photo_mode_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_PHOTO_MODE_UNKNOWN;
+	if (strcmp(str, "single") == 0)
+		return VMETA_PHOTO_MODE_SINGLE;
+	if (strcmp(str, "bracketing") == 0)
+		return VMETA_PHOTO_MODE_BRACKETING;
+	if (strcmp(str, "burst") == 0)
+		return VMETA_PHOTO_MODE_BURST;
+	if (strcmp(str, "timelapse") == 0)
+		return VMETA_PHOTO_MODE_TIMELAPSE;
+	if (strcmp(str, "gpslapse") == 0)
+		return VMETA_PHOTO_MODE_GPSLAPSE;
+	if (strcmp(str, "panorama") == 0)
+		return VMETA_PHOTO_MODE_PANORAMA;
+	return VMETA_PHOTO_MODE_UNKNOWN;
+}
+
+
+const char *vmeta_photo_mode_to_str(enum vmeta_photo_mode val)
+{
+	/* Note: case matters for parsing in libphoto-metadata */
+	switch (val) {
+	case VMETA_PHOTO_MODE_SINGLE:
+		return "Single";
+	case VMETA_PHOTO_MODE_BRACKETING:
+		return "Bracketing";
+	case VMETA_PHOTO_MODE_BURST:
+		return "Burst";
+	case VMETA_PHOTO_MODE_TIMELAPSE:
+		return "TimeLapse";
+	case VMETA_PHOTO_MODE_GPSLAPSE:
+		return "GPSLapse";
+	case VMETA_PHOTO_MODE_PANORAMA:
+		return "Panorama";
+	default:
+		return "unknown";
+	}
+}
+
+
+enum vmeta_panorama_type vmeta_panorama_type_from_str(const char *str)
+{
+	if (str == NULL)
+		return VMETA_PANORAMA_TYPE_UNKNOWN;
+	if (strcmp(str, "none") == 0)
+		return VMETA_PANORAMA_TYPE_NONE;
+	if (strcmp(str, "horizontal-180") == 0)
+		return VMETA_PANORAMA_TYPE_HORIZONTAL_180;
+	if (strcmp(str, "vertical-180") == 0)
+		return VMETA_PANORAMA_TYPE_VERTICAL_180;
+	if (strcmp(str, "spherical") == 0)
+		return VMETA_PANORAMA_TYPE_SPHERICAL;
+	if (strcmp(str, "super-wide") == 0)
+		return VMETA_PANORAMA_TYPE_SUPER_WIDE;
+	return VMETA_PANORAMA_TYPE_UNKNOWN;
+}
+
+
+const char *vmeta_panorama_type_to_str(enum vmeta_panorama_type val)
+{
+	switch (val) {
+	case VMETA_PANORAMA_TYPE_NONE:
+		return "none";
+	case VMETA_PANORAMA_TYPE_HORIZONTAL_180:
+		return "horizontal-180";
+	case VMETA_PANORAMA_TYPE_VERTICAL_180:
+		return "vertical-180";
+	case VMETA_PANORAMA_TYPE_SPHERICAL:
+		return "spherical";
+	case VMETA_PANORAMA_TYPE_SUPER_WIDE:
+		return "super-wide";
 	default:
 		return "unknown";
 	}

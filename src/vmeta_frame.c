@@ -252,7 +252,8 @@ int vmeta_frame_read2(struct vmeta_buffer *buf,
 		      struct vmeta_frame **ret_obj)
 {
 	int res = 0;
-	size_t start = 0, len = 0;
+	size_t start = 0;
+	size_t len = 0;
 	uint16_t id = 0;
 	struct vmeta_frame *meta = NULL;
 
@@ -583,21 +584,31 @@ int vmeta_frame_to_json_str(struct vmeta_frame *meta,
 {
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(output == NULL, EINVAL);
+	ULOG_ERRNO_RETURN_ERR_IF(len == 0, EINVAL);
 
+	int ret;
 	const char *jstr;
 	struct json_object *jobj = json_object_new_object();
 	if (jobj == NULL)
 		return -ENOMEM;
-	int ret = vmeta_frame_to_json(meta, jobj);
+
+	ret = vmeta_frame_to_json(meta, jobj);
 	if (ret < 0)
 		goto out;
 
 	jstr = json_object_to_json_string(jobj);
-	if (strlen(jstr) + 1 > len) {
+	if (jstr == NULL) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = snprintf(output, (size_t)len, "%s", jstr);
+	if ((ret < 0) || ((unsigned int)ret >= len)) {
 		ret = -ENOBUFS;
 		goto out;
 	}
-	strcpy(output, jstr);
+
+	ret = 0;
 
 out:
 	json_object_put(jobj);
@@ -724,7 +735,8 @@ int vmeta_frame_ext_timestamp_write(
 	const struct vmeta_frame_ext_timestamp *meta)
 {
 	int res = 0;
-	size_t start = 0, end = 0;
+	size_t start = 0;
+	size_t end = 0;
 	uint16_t len = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -763,7 +775,8 @@ int vmeta_frame_ext_timestamp_read(struct vmeta_buffer *buf,
 {
 	int res = 0;
 	size_t start = 0;
-	uint16_t id = 0, len = 0;
+	uint16_t id = 0;
+	uint16_t len = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 
@@ -812,12 +825,16 @@ int vmeta_frame_ext_followme_write(struct vmeta_buffer *buf,
 				   const struct vmeta_frame_ext_followme *meta)
 {
 	int res = 0;
-	size_t start = 0, end = 0;
+	size_t start = 0;
+	size_t end = 0;
 	uint16_t len = 0;
 	struct vmeta_location target;
-	uint8_t mode = 0, anim = 0;
-	uint8_t reserved1 = 0, reserved2 = 0;
-	uint32_t reserved3 = 0, reserved4 = 0;
+	uint8_t mode = 0;
+	uint8_t anim = 0;
+	uint8_t reserved1 = 0;
+	uint8_t reserved2 = 0;
+	uint32_t reserved3 = 0;
+	uint32_t reserved4 = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 
@@ -869,11 +886,15 @@ int vmeta_frame_ext_followme_read(struct vmeta_buffer *buf,
 {
 	int res = 0;
 	size_t start = 0;
-	uint16_t id = 0, len = 0;
+	uint16_t id = 0;
+	uint16_t len = 0;
 	struct vmeta_location target;
-	uint8_t mode = 0, anim = 0;
-	uint8_t reserved1 = 0, reserved2 = 0;
-	uint32_t reserved3 = 0, reserved4 = 0;
+	uint8_t mode = 0;
+	uint8_t anim = 0;
+	uint8_t reserved1 = 0;
+	uint8_t reserved2 = 0;
+	uint32_t reserved3 = 0;
+	uint32_t reserved4 = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 
@@ -941,10 +962,13 @@ int vmeta_frame_ext_automation_write(
 	const struct vmeta_frame_ext_automation *meta)
 {
 	int res = 0;
-	size_t start = 0, end = 0;
+	size_t start = 0;
+	size_t end = 0;
 	uint16_t len = 0;
-	struct vmeta_location framing_target, flight_destination;
-	uint8_t flags = 0, anim = 0;
+	struct vmeta_location framing_target;
+	struct vmeta_location flight_destination;
+	uint8_t flags = 0;
+	uint8_t anim = 0;
 	uint16_t reserved = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -1001,9 +1025,12 @@ int vmeta_frame_ext_automation_read(struct vmeta_buffer *buf,
 {
 	int res = 0;
 	size_t start = 0;
-	uint16_t id = 0, len = 0;
-	struct vmeta_location framing_target, flight_destination;
-	uint8_t flags = 0, anim = 0;
+	uint16_t id = 0;
+	uint16_t len = 0;
+	struct vmeta_location framing_target;
+	struct vmeta_location flight_destination;
+	uint8_t flags = 0;
+	uint8_t anim = 0;
 	uint16_t reserved = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -1077,7 +1104,8 @@ int vmeta_frame_ext_thermal_write(struct vmeta_buffer *buf,
 				  const struct vmeta_frame_ext_thermal *meta)
 {
 	int res = 0;
-	size_t start = 0, end = 0;
+	size_t start = 0;
+	size_t end = 0;
 	uint16_t len = 0;
 	uint8_t flags = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
@@ -1130,7 +1158,8 @@ int vmeta_frame_ext_thermal_read(struct vmeta_buffer *buf,
 {
 	int res = 0;
 	size_t start = 0;
-	uint16_t id = 0, len = 0;
+	uint16_t id = 0;
+	uint16_t len = 0;
 	uint8_t flags = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
@@ -1196,7 +1225,8 @@ int vmeta_frame_ext_lfic_write(struct vmeta_buffer *buf,
 			       const struct vmeta_frame_ext_lfic *meta)
 {
 	int res = 0;
-	size_t start = 0, end = 0;
+	size_t start = 0;
+	size_t end = 0;
 	uint16_t len = 0;
 	struct vmeta_location target;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
@@ -1245,7 +1275,8 @@ int vmeta_frame_ext_lfic_read(struct vmeta_buffer *buf,
 {
 	int res = 0;
 	size_t start = 0;
-	uint16_t id = 0, len = 0;
+	uint16_t id = 0;
+	uint16_t len = 0;
 	struct vmeta_location target;
 
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);

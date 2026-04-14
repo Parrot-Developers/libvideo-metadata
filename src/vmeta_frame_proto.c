@@ -144,7 +144,7 @@ error:
 }
 
 
-int vmeta_frame_proto_read(struct vmeta_buffer *buf,
+int vmeta_frame_proto_read(const struct vmeta_buffer *buf,
 			   struct vmeta_frame_proto **meta)
 {
 	int res;
@@ -364,8 +364,9 @@ out:
 }
 
 
-int vmeta_frame_proto_release_unpacked_rw(struct vmeta_frame *meta,
-					  Vmeta__TimedMetadata *proto_meta)
+int vmeta_frame_proto_release_unpacked_rw(
+	struct vmeta_frame *meta,
+	const Vmeta__TimedMetadata *proto_meta)
 {
 	int ret = 0;
 
@@ -731,7 +732,8 @@ vmeta_frame_proto_get_drone_local_position(Vmeta__DroneMetadata *drone)
 Vmeta__WifiLinkMetadata *
 vmeta_frame_proto_add_wifi_link(Vmeta__TimedMetadata *meta)
 {
-	Vmeta__LinkMetadata *link, **tmp;
+	Vmeta__LinkMetadata *link;
+	Vmeta__LinkMetadata **tmp;
 	Vmeta__WifiLinkMetadata *wifi;
 
 	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
@@ -769,7 +771,8 @@ vmeta_frame_proto_add_wifi_link(Vmeta__TimedMetadata *meta)
 VMETA_API Vmeta__StarfishLinkInfo *
 vmeta_frame_proto_add_starfish_link_info(Vmeta__StarfishLinkMetadata *starfish)
 {
-	Vmeta__StarfishLinkInfo *link, **tmp;
+	Vmeta__StarfishLinkInfo *link;
+	Vmeta__StarfishLinkInfo **tmp;
 
 	ULOG_ERRNO_RETURN_VAL_IF(!starfish, EINVAL, NULL);
 
@@ -796,7 +799,8 @@ vmeta_frame_proto_add_starfish_link_info(Vmeta__StarfishLinkMetadata *starfish)
 Vmeta__StarfishLinkMetadata *
 vmeta_frame_proto_add_starfish_link(Vmeta__TimedMetadata *meta)
 {
-	Vmeta__LinkMetadata *link, **tmp;
+	Vmeta__LinkMetadata *link;
+	Vmeta__LinkMetadata **tmp;
 	Vmeta__StarfishLinkMetadata *starfish;
 
 	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
@@ -896,7 +900,8 @@ vmeta_frame_proto_get_proposal(Vmeta__TimedMetadata *meta)
 Vmeta__BoundingBox *
 vmeta_frame_proto_proposal_add_box(Vmeta__TrackingProposalMetadata *proposal)
 {
-	Vmeta__BoundingBox *box, **tmp;
+	Vmeta__BoundingBox *box;
+	Vmeta__BoundingBox **tmp;
 
 	ULOG_ERRNO_RETURN_VAL_IF(!proposal, EINVAL, NULL);
 
@@ -1084,7 +1089,8 @@ vmeta_frame_proto_get_thermal_mask(Vmeta__ThermalMetadata *thermal)
 Vmeta__LFICMetadata *
 vmeta_frame_proto_get_lfic_by_index(Vmeta__TimedMetadata *meta, size_t index)
 {
-	Vmeta__LFICMetadata *lfic, **tmp;
+	Vmeta__LFICMetadata *lfic;
+	Vmeta__LFICMetadata **tmp;
 
 	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
 	ULOG_ERRNO_RETURN_VAL_IF(index > meta->n_lfic, EINVAL, NULL);
@@ -1124,7 +1130,8 @@ vmeta_frame_proto_get_lfic_by_index(Vmeta__TimedMetadata *meta, size_t index)
 Vmeta__UserMetadata *
 vmeta_frame_proto_get_user_by_index(Vmeta__TimedMetadata *meta, size_t index)
 {
-	Vmeta__UserMetadata *user, **tmp;
+	Vmeta__UserMetadata *user;
+	Vmeta__UserMetadata **tmp;
 
 	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
 	ULOG_ERRNO_RETURN_VAL_IF(index > meta->n_user, EINVAL, NULL);
@@ -1161,6 +1168,32 @@ vmeta_frame_proto_get_user_by_index(Vmeta__TimedMetadata *meta, size_t index)
 }
 
 
+VMETA_API double *
+vmeta_frame_proto_get_color_matrix_1_by_index(Vmeta__PhotoMetadata *photo,
+					      size_t index)
+{
+	double *tmp;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!photo, EINVAL, NULL);
+	ULOG_ERRNO_RETURN_VAL_IF(index > photo->n_color_matrix_1, EINVAL, NULL);
+
+	if (photo->n_color_matrix_1 > index)
+		return &photo->color_matrix_1[index];
+
+	tmp = realloc(photo->color_matrix_1, (index + 1) * sizeof(double));
+	if (!tmp) {
+		ULOG_ERRNO("realloc", ENOMEM);
+		return NULL;
+	}
+
+	photo->n_color_matrix_1 = index + 1;
+	photo->color_matrix_1 = tmp;
+	photo->color_matrix_1[index] = 0.0;
+
+	return &photo->color_matrix_1[index];
+}
+
+
 Vmeta__Location *vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic)
 {
 	Vmeta__Location *location;
@@ -1177,6 +1210,25 @@ Vmeta__Location *vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic)
 	vmeta__location__init(location);
 	lfic->location = location;
 	return location;
+}
+
+Vmeta__PhotoMetadata *vmeta_frame_proto_get_photo(Vmeta__TimedMetadata *meta)
+{
+	Vmeta__PhotoMetadata *photo;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!meta, EINVAL, NULL);
+
+	if (meta->photo)
+		return meta->photo;
+
+	photo = calloc(1, sizeof(*photo));
+	if (!photo) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__photo_metadata__init(photo);
+	meta->photo = photo;
+	return photo;
 }
 
 

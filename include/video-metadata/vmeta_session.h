@@ -185,6 +185,9 @@ enum vmeta_session_location_format {
 /* Maximum length of a principal point string */
 #define VMETA_SESSION_PRINCIPAL_POINT_MAX_LEN 20
 
+/* Maximum length of a secure common name string */
+#define VMETA_SESSION_SECURE_CN_MAX_LEN 64
+
 
 /* RTCP SDES packet types used on streaming */
 enum vmeta_stream_sdes_type {
@@ -772,7 +775,7 @@ struct vmeta_camera_model {
 		} perspective;
 
 		/* Fisheye camera parameters (only valid if camera_model_type
-		 * is VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE */
+		 * is VMETA_CAMERA_MODEL_TYPE_FISHEYE */
 		struct {
 			/* Fisheye affine matrix coefficients */
 			struct {
@@ -780,6 +783,11 @@ struct vmeta_camera_model {
 				float d;
 				float e;
 				float f;
+				/* If symmetric affine matrix should be used */
+				uint8_t symmetric;
+				/* Symmetic validity flag (1 if the fields in
+				 * the structure are valid, 0 otherwise) */
+				uint8_t symmetric_valid;
 			} affine_matrix;
 
 			/* Fisheye polynomial coefficients
@@ -936,7 +944,7 @@ struct vmeta_session {
 
 	/* Media date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (record only, unused on live streaming) */
-	long media_date_gmtoff;
+	int32_t media_date_gmtoff;
 
 	/* Run date and time in seconds since the Epoch
 	 * (unused on the controller side) */
@@ -944,7 +952,7 @@ struct vmeta_session {
 
 	/* Run date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (unused on the controller side) */
-	long run_date_gmtoff;
+	int32_t run_date_gmtoff;
 
 	/* Run UUID (32-chars hex string representing a 128bits value)
 	 * (unused on the controller side) */
@@ -956,7 +964,7 @@ struct vmeta_session {
 
 	/* Boot date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (unused on the controller side) */
-	long boot_date_gmtoff;
+	int32_t boot_date_gmtoff;
 
 	/* Boot UUID (32-chars hex string representing a 128bits value)
 	 * (unused on the controller side) */
@@ -968,7 +976,7 @@ struct vmeta_session {
 
 	/* Flight date GMT offset in seconds east (eg. GMT-6 is -21600)
 	 * (unused on the controller side) */
-	long flight_date_gmtoff;
+	int32_t flight_date_gmtoff;
 
 	/* Flight UUID (32-chars hex string representing a 128bits value)
 	 * (unused on the controller side) */
@@ -1025,6 +1033,18 @@ struct vmeta_session {
 	/* Video stop reason */
 	enum vmeta_video_stop_reason video_stop_reason;
 
+	/* Photo mode */
+	enum vmeta_photo_mode photo_mode;
+
+	/* Panorama type */
+	enum vmeta_panorama_type panorama_type;
+
+	/* Expected number of photos in the sequence (burst, panorama...) */
+	uint32_t photo_count;
+
+	/* Common name of the drone certificate used to sign the picture file */
+	char secure_cn[VMETA_SESSION_SECURE_CN_MAX_LEN];
+
 	/* Image dynamic range */
 	enum vmeta_dynamic_range dynamic_range;
 
@@ -1064,7 +1084,7 @@ struct vmeta_session {
  */
 VMETA_API
 ssize_t
-vmeta_session_date_write(char *str, size_t len, uint64_t date, long gmtoff);
+vmeta_session_date_write(char *str, size_t len, uint64_t date, int32_t gmtoff);
 
 
 /**
@@ -1079,7 +1099,7 @@ vmeta_session_date_write(char *str, size_t len, uint64_t date, long gmtoff);
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_session_date_read(const char *str, uint64_t *date, long *gmtoff);
+int vmeta_session_date_read(const char *str, uint64_t *date, int32_t *gmtoff);
 
 
 /**
@@ -1634,6 +1654,88 @@ int vmeta_session_cmp(const struct vmeta_session *meta1,
  */
 VMETA_API
 int vmeta_session_is_valid(const struct vmeta_session *meta);
+
+
+/**
+ * Compare two vmeta_euler structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int vmeta_euler_cmp(const struct vmeta_euler *meta1,
+			      const struct vmeta_euler *meta2);
+
+
+/**
+ * Compare two vmeta_thermal_alignment structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int
+vmeta_thermal_alignment_cmp(const struct vmeta_thermal_alignment *meta1,
+			    const struct vmeta_thermal_alignment *meta2);
+
+
+/**
+ * Compare two vmeta_thermal_conversion structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int
+vmeta_thermal_conversion_cmp(const struct vmeta_thermal_conversion *meta1,
+			     const struct vmeta_thermal_conversion *meta2);
+
+
+/**
+ * Compare two vmeta_thermal structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int vmeta_thermal_cmp(const struct vmeta_thermal *meta1,
+				const struct vmeta_thermal *meta2);
+
+
+/**
+ * Compare two vmeta_fov structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int vmeta_fov_cmp(const struct vmeta_fov *meta1,
+			    const struct vmeta_fov *meta2);
+
+
+/**
+ * Compare two vmeta_location structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int vmeta_location_cmp(const struct vmeta_location *meta1,
+				 const struct vmeta_location *meta2);
+
+
+/**
+ * Compare two vmeta_overlay structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int vmeta_overlay_cmp(const struct vmeta_overlay *meta1,
+				const struct vmeta_overlay *meta2);
+
+
+/**
+ * Compare two vmeta_camera_model structures
+ * @param meta1: first structure to compare
+ * @param meta1: second structure to compare
+ * @return 1 if equal, 0 otherwise
+ */
+VMETA_API int vmeta_camera_model_cmp(const struct vmeta_camera_model *meta1,
+				     const struct vmeta_camera_model *meta2);
 
 
 #endif /* !_VMETA_SESSION_H_ */

@@ -35,13 +35,15 @@ int vmeta_frame_v2_write(struct vmeta_buffer *buf,
 			 const struct vmeta_frame_v2 *meta)
 {
 	int res = 0;
-	size_t start = 0, end = 0;
+	size_t start = 0;
+	size_t end = 0;
 	uint16_t len = 0;
 	const struct vmeta_frame_v2_base *base = NULL;
 	struct vmeta_location location;
 	int32_t gps_altitude = 0;
 	int32_t gps_altitude_and_sv_count = 0;
-	uint8_t state = 0, mode = 0;
+	uint8_t state = 0;
+	uint8_t mode = 0;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	base = &meta->base;
@@ -126,11 +128,13 @@ int vmeta_frame_v2_read(struct vmeta_buffer *buf, struct vmeta_frame_v2 *meta)
 {
 	int res = 0;
 	size_t start = 0;
-	uint16_t id = 0, len = 0;
+	uint16_t id = 0;
+	uint16_t len = 0;
 	struct vmeta_location location;
 	int32_t gps_altitude = 0;
 	int32_t gps_altitude_and_sv_count = 0;
-	uint8_t state = 0, mode = 0;
+	uint8_t state = 0;
+	uint8_t mode = 0;
 	struct vmeta_frame_v2_base *base = NULL;
 	ULOG_ERRNO_RETURN_ERR_IF(buf == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);

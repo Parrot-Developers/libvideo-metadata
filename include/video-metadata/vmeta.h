@@ -30,6 +30,8 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#include <photo-metadata-defs/pmeta_defs.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
@@ -210,6 +212,53 @@ enum vmeta_video_stop_reason {
 
 	/* Internal error stop reason */
 	VMETA_VIDEO_STOP_REASON_INTERNAL_ERROR,
+};
+
+
+/* Photo mode */
+enum vmeta_photo_mode {
+	/* Unknown photo mode */
+	VMETA_PHOTO_MODE_UNKNOWN = 0,
+
+	/* Single photo mode */
+	VMETA_PHOTO_MODE_SINGLE,
+
+	/* Bracketing photo mode */
+	VMETA_PHOTO_MODE_BRACKETING,
+
+	/* Burst photo mode */
+	VMETA_PHOTO_MODE_BURST,
+
+	/* Timelapse photo mode */
+	VMETA_PHOTO_MODE_TIMELAPSE,
+
+	/* GPS-lapse photo mode */
+	VMETA_PHOTO_MODE_GPSLAPSE,
+
+	/* Panorama photo mode */
+	VMETA_PHOTO_MODE_PANORAMA,
+};
+
+
+/* Panorama type */
+enum vmeta_panorama_type {
+	/* Unknown panorama type */
+	VMETA_PANORAMA_TYPE_UNKNOWN = 0,
+
+	/* No panorama */
+	VMETA_PANORAMA_TYPE_NONE,
+
+	/* Horizontal 180 panorama type */
+	VMETA_PANORAMA_TYPE_HORIZONTAL_180,
+
+	/* Vertical 180 panorama type */
+	VMETA_PANORAMA_TYPE_VERTICAL_180,
+
+	/* Spherical panorama type */
+	VMETA_PANORAMA_TYPE_SPHERICAL,
+
+	/* Super wide panorama type */
+	VMETA_PANORAMA_TYPE_SUPER_WIDE,
 };
 
 
@@ -507,6 +556,83 @@ vmeta_camera_subtype_to_str(enum vmeta_camera_subtype val);
 
 
 /**
+ * Splits a specific camera type into a generic camera type and its
+ * corresponding subtype. This is the inverse operation of
+ * vmeta_camera_type_combine_subtype.
+ *
+ * If the input type is a specific combined type (e.g.,
+ * VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_LEFT), it will be split into its generic
+ * base type (VMETA_CAMERA_TYPE_HORIZONTAL_STEREO) and its subtype
+ * (VMETA_CAMERA_SUBTYPE_LEFT).
+ *
+ * If the input type is already generic or has no associated subtype, the
+ * split_type will be the original type and split_subtype will be set to
+ * VMETA_CAMERA_SUBTYPE_UNKNOWN.
+ *
+ * @param type: The camera type to split (e.g.,
+ * VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_LEFT).
+ * @param split_type: Output pointer to store the resulting generic base type.
+ * @param split_subtype: Output pointer to store the resulting subtype.
+ * @return 0 on success (split applied), or -ENOENT if the type cannot be
+ * further decomposed (already generic). Returns -EINVAL if input pointers are
+ * NULL.
+ */
+VMETA_API
+int vmeta_camera_type_split_subtype(enum vmeta_camera_type type,
+				    enum vmeta_camera_type *split_type,
+				    enum vmeta_camera_subtype *split_subtype);
+
+
+/**
+ * Tries to combine a generic stereo camera type and its subtype into a single,
+ * specific camera type enumeration. This effectively normalizes the camera
+ * representation when a subtype is available.
+ *
+ * If a combination is found (e.g., VMETA_CAMERA_TYPE_HORIZONTAL_STEREO +
+ * VMETA_CAMERA_SUBTYPE_LEFT), the specific type
+ * (VMETA_CAMERA_TYPE_HORIZONTAL_STEREO_LEFT) is returned, and the subtype is
+ * set to VMETA_CAMERA_SUBTYPE_UNKNOWN as the subtype information is now encoded
+ * in the type itself.
+ *
+ * @param type: The generic camera type (e.g.,
+ * VMETA_CAMERA_TYPE_HORIZONTAL_STEREO).
+ * @param subtype: The camera subtype (e.g., VMETA_CAMERA_SUBTYPE_LEFT or
+ * VMETA_CAMERA_SUBTYPE_UNKNOWN).
+ * @param combined_type: Output pointer to store the resulting specific type on
+ * success, or the original type on failure.
+ * @param combined_subtype: Output pointer to store the resulting subtype
+ * (VMETA_CAMERA_SUBTYPE_UNKNOWN on success, or the original subtype on
+ * failure).
+ * @return 0 on success (combination found and applied), or -ENOENT if no
+ * specific combination was found for the given type/subtype pair. Returns
+ * -EINVAL if input pointers are NULL.
+ */
+VMETA_API
+int vmeta_camera_type_combine_subtype(
+	enum vmeta_camera_type type,
+	enum vmeta_camera_subtype subtype,
+	enum vmeta_camera_type *combined_type,
+	enum vmeta_camera_subtype *combined_subtype);
+
+
+/**
+ * Compares two camera type/subtype pairs (vmeta_camera_type/subtype).
+ *
+ * @param type1: The camera type of the first element to compare.
+ * @param subtype1: The camera subtype of the first element to compare.
+ * @param type2: The camera type of the second element to compare.
+ * @param subtype2: The camera subtype of the second element to compare.
+ * @return 1 if the two pairs (type1, subtype1) and (type2, subtype2) are equal,
+ * 0 otherwise.
+ */
+VMETA_API
+int vmeta_camera_type_subtype_pair_cmp(enum vmeta_camera_type type1,
+				       enum vmeta_camera_subtype subtype1,
+				       enum vmeta_camera_type type2,
+				       enum vmeta_camera_subtype subtype2);
+
+
+/**
  * Get an enum vmeta_camera_spectrum value from a string.
  * Valid strings are only the suffix of the camera spectrum (eg. 'VISIBLE').
  * The case is ignored.
@@ -594,6 +720,41 @@ vmeta_video_stop_reason_from_str(const char *str);
  */
 VMETA_API const char *
 vmeta_video_stop_reason_to_str(enum vmeta_video_stop_reason val);
+
+
+/**
+ * Get an enum vmeta_photo_mode value from a string.
+ * @param str: photo mode string to convert
+ * @return the enum vmeta_photo_mode value or
+ * VMETA_PHOTO_MODE_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_photo_mode vmeta_photo_mode_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_photo_mode value.
+ * @param val: photo mode value to convert
+ * @return a string description of the photo mode
+ */
+VMETA_API const char *vmeta_photo_mode_to_str(enum vmeta_photo_mode val);
+
+
+/**
+ * Get an enum vmeta_panorama_type value from a string.
+ * @param str: panorama type string to convert
+ * @return the enum vmeta_panorama_type value or
+ * VMETA_PANORAMA_TYPE_UNKNOWN if unknown
+ */
+VMETA_API enum vmeta_panorama_type
+vmeta_panorama_type_from_str(const char *str);
+
+
+/**
+ * Get a string from an enum vmeta_panorama_type value.
+ * @param val: panorama type value to convert
+ * @return a string description of the panorama type
+ */
+VMETA_API const char *vmeta_panorama_type_to_str(enum vmeta_panorama_type val);
 
 
 /**

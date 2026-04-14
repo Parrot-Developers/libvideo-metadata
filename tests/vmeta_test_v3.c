@@ -86,8 +86,8 @@ static void fill_location(struct vmeta_location *loc, bool random)
 		loc->altitude_egm96amsl = futils_randomrd();
 		loc->latitude = futils_randomrd();
 		loc->longitude = futils_randomrd();
-		loc->horizontal_accuracy = futils_randomrd();
-		loc->vertical_accuracy = futils_randomrd();
+		loc->horizontal_accuracy = futils_randomrf();
+		loc->vertical_accuracy = futils_randomrf();
 		loc->sv_count = futils_randomr8();
 		loc->valid = futils_randomr8_maximum(1);
 	} else {
@@ -95,8 +95,8 @@ static void fill_location(struct vmeta_location *loc, bool random)
 		loc->altitude_egm96amsl = 420.;
 		loc->latitude = 0.1;
 		loc->longitude = 0.2;
-		loc->horizontal_accuracy = 0.3;
-		loc->vertical_accuracy = 0.4;
+		loc->horizontal_accuracy = 0.3f;
+		loc->vertical_accuracy = 0.4f;
 		loc->sv_count = 15;
 		loc->valid = 1;
 	}
@@ -568,7 +568,8 @@ static void test_write(void)
 
 static void test_read(void)
 {
-	struct vmeta_frame *frame, *ref;
+	struct vmeta_frame *frame;
+	struct vmeta_frame *ref;
 	struct vmeta_buffer vb;
 	int err;
 
@@ -591,7 +592,8 @@ static void test_read(void)
 
 static void test_read_proto(void)
 {
-	struct vmeta_frame *frame, *ref;
+	struct vmeta_frame *frame;
+	struct vmeta_frame *ref;
 	struct vmeta_buffer vb;
 	int err;
 
@@ -613,11 +615,13 @@ static void test_read_proto(void)
 
 static void test_write_read_once(void)
 {
-	struct vmeta_frame *in, *out;
+	struct vmeta_frame *in;
+	struct vmeta_frame *out;
 	uint8_t *buf;
 	const size_t buflen = 1 * 1024 * 1024; /* 1M should be enough */
 	struct vmeta_buffer vb;
-	int res, err;
+	int res;
+	int err;
 
 	buf = malloc(buflen);
 	CU_ASSERT_PTR_NOT_NULL(buf);
@@ -655,11 +659,14 @@ static void test_write_read(void)
 
 static void test_write_read_once_proto(void)
 {
-	struct vmeta_frame *in, *out, *proto;
+	struct vmeta_frame *in;
+	struct vmeta_frame *out;
+	struct vmeta_frame *proto;
 	uint8_t *buf;
 	const size_t buflen = 1 * 1024 * 1024; /* 1M should be enough */
 	struct vmeta_buffer vb;
-	int res, err;
+	int res;
+	int err;
 
 	buf = malloc(buflen);
 	CU_ASSERT_PTR_NOT_NULL(buf);
@@ -707,7 +714,8 @@ static void test_read_write(void)
 	struct vmeta_frame *tmp;
 	uint8_t *buf;
 	const size_t buflen = 1024;
-	struct vmeta_buffer in, out;
+	struct vmeta_buffer in;
+	struct vmeta_buffer out;
 	int err;
 
 	buf = malloc(buflen);

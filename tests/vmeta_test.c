@@ -50,11 +50,10 @@ static CU_SuiteInfo s_dump_suites[] = {
 
 int main(int argc, char *argv[])
 {
-	int i;
 	CU_initialize_registry();
 	CU_register_suites(s_suites);
 
-	for (i = 1; i < argc; i++) {
+	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "monkey") == 0)
 			CU_register_suites(s_monkey_suites);
 		if (strcmp(argv[i], "dump") == 0) {

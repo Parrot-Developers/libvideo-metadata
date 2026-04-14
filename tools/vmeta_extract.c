@@ -116,12 +116,13 @@ static void kml_header(struct vmeta_extract *self, int is_absolute_altitude)
 	fprintf(self->kml_file, "      <LineString>\n");
 	fprintf(self->kml_file,
 		"        <altitudeMode>%s</altitudeMode>\n",
-		(is_absolute_altitude) ? "absolute" : "relativeToGround");
+		is_absolute_altitude ? "absolute" : "relativeToGround");
 	fprintf(self->kml_file, "        <coordinates>\n");
 }
 
 
-static void kml_coord(struct vmeta_extract *self, struct vmeta_location *loc)
+static void kml_coord(struct vmeta_extract *self,
+		      const struct vmeta_location *loc)
 {
 	if (loc->valid) {
 		fprintf(self->kml_file,
@@ -159,7 +160,6 @@ static int process_vmeta_frame(struct vmeta_extract *self,
 	/* CSV output */
 	if (self->csv_file) {
 		ssize_t err;
-		size_t len = 0;
 		char *str = malloc(STR_SIZE);
 		if (str == NULL) {
 			ret = -ENOMEM;
@@ -190,12 +190,11 @@ static int process_vmeta_frame(struct vmeta_extract *self,
 
 		err = vmeta_frame_to_csv(meta, str, STR_SIZE);
 		if (err < 0) {
-			ULOG_ERRNO("vmeta_frame_to_csv", (int)-err);
+			ret = (err >= INT_MIN) ? (int)err : -EPROTO;
+			ULOG_ERRNO("vmeta_frame_to_csv", -ret);
 			free(str);
-			ret = err;
 			goto out;
 		}
-		len += err;
 		fprintf(self->csv_file, "%" PRIu64 " %s\n", ts, str);
 		free(str);
 	}
@@ -324,13 +323,16 @@ static int session_output(struct vmeta_extract *self)
 
 static int raw_extract(struct vmeta_extract *self)
 {
-	int ret = 0, err;
+	int ret = 0;
+	int err;
+	size_t err2;
 	FILE *in_file = NULL;
 	uint8_t data[BUF_SIZE];
 	size_t size = 0;
 	struct vmeta_buffer buf;
-	uint64_t ts = 0, ts_inc = 33333;
-	char *mime_format = NULL;
+	uint64_t ts = 0;
+	uint64_t ts_inc = 33333;
+	const char *mime_format = NULL;
 
 	/* JSON output */
 	if (self->json_file_name) {
@@ -351,8 +353,8 @@ static int raw_extract(struct vmeta_extract *self)
 	do {
 		/* Get the metadata type and size */
 		uint32_t val32 = 0;
-		err = fread(&val32, 4, 1, in_file);
-		if (err != 1) {
+		err2 = fread(&val32, 4, 1, in_file);
+		if (err2 != 1) {
 			if (!feof(in_file)) {
 				ret = -EIO;
 				ULOG_ERRNO("fread", -ret);
@@ -384,8 +386,8 @@ static int raw_extract(struct vmeta_extract *self)
 			ULOG_ERRNO("fseek", -ret);
 			break;
 		}
-		err = fread(data, size, 1, in_file);
-		if (err != 1) {
+		err2 = fread(data, size, 1, in_file);
+		if (err2 != 1) {
 			ret = -EIO;
 			ULOG_ERRNO("fread", -ret);
 			break;
@@ -416,8 +418,14 @@ static int mp4_extract(struct vmeta_extract *self)
 	struct mp4_demux *demux = NULL;
 	struct mp4_track_info tk;
 	struct mp4_track_sample sample;
-	int ret = 0, i, count, err, found = 0, meta_found = 0;
-	unsigned int id, data_capacity = 0;
+	int ret = 0;
+	int i;
+	int count;
+	int err;
+	int found = 0;
+	int meta_found = 0;
+	unsigned int id;
+	unsigned int data_capacity = 0;
 	uint8_t *data = NULL;
 	struct vmeta_buffer buf;
 	char *mime_format = NULL;
@@ -794,7 +802,8 @@ static void session_metadata_peer_changed_cb(struct vstrm_receiver *stream,
 
 static int pcap_extract(struct vmeta_extract *self)
 {
-	int ret = 0, err;
+	int ret = 0;
+	int err;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t *pcap;
 	int datalink;
@@ -931,7 +940,10 @@ static void usage(char *prog_name)
 int main(int argc, char *argv[])
 {
 	int status = EXIT_SUCCESS;
-	int idx, c, ret;
+	int idx;
+	int c;
+	int ret;
+	size_t len;
 	struct vmeta_extract *self;
 
 	self = calloc(1, sizeof(*self));
@@ -963,7 +975,6 @@ int main(int argc, char *argv[])
 		case 'h':
 			usage(argv[0]);
 			exit(EXIT_SUCCESS);
-			break;
 
 		case ARGS_ID_CSV:
 			self->csv_file_name = optarg;
@@ -993,7 +1004,6 @@ int main(int argc, char *argv[])
 		default:
 			usage(argv[0]);
 			exit(EXIT_FAILURE);
-			break;
 		}
 	}
 
@@ -1009,6 +1019,8 @@ int main(int argc, char *argv[])
 		status = EXIT_FAILURE;
 		goto cleanup;
 	}
+
+	len = strnlen(self->input_file_name, PATH_MAX);
 
 	if (self->csv_file_name) {
 		self->csv_file = fopen(self->csv_file_name, "w");
@@ -1032,10 +1044,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (!strncasecmp(self->input_file_name + strlen(self->input_file_name) -
-				 4,
-			 ".mp4",
-			 4)) {
+	if ((len >= 4) &&
+	    !(strcasecmp(self->input_file_name + len - 4, ".mp4"))) {
 #ifdef BUILD_LIBMP4
 		/* .mp4 file input */
 		ret = mp4_extract(self);
@@ -1050,10 +1060,8 @@ int main(int argc, char *argv[])
 		status = EXIT_FAILURE;
 		goto cleanup;
 #endif /* BUILD_LIBMP4 */
-	} else if (!strncasecmp(self->input_file_name +
-					strlen(self->input_file_name) - 5,
-				".pcap",
-				5)) {
+	} else if ((len >= 5) &&
+		   !(strcasecmp(self->input_file_name + len - 5, ".pcap"))) {
 #ifdef BUILD_LIBPCAP
 		struct vstrm_receiver_cfg vstrm_cfg;
 		memset(&vstrm_cfg, 0, sizeof(vstrm_cfg));
@@ -1123,6 +1131,7 @@ cleanup:
 	if (self->receiver)
 		vstrm_receiver_destroy(self->receiver);
 
+	free(self);
 	printf("%s\n", (status == EXIT_SUCCESS) ? "Done!" : "Failed!");
-	exit(status);
+	return status;
 }

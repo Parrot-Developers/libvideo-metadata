@@ -539,6 +539,15 @@ void compare_vmeta_proto_camera_model(const struct vmeta_camera_model *t1,
 		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.affine_matrix.f,
 				       t2->fisheye->affine_matrix->f,
 				       granularity(5));
+		CU_ASSERT_EQUAL(
+			t1->fisheye.affine_matrix.symmetric_valid,
+			(t2->fisheye->affine_matrix->symmetric != NULL));
+		if (t1->fisheye.affine_matrix.symmetric_valid &&
+		    (t2->fisheye->affine_matrix->symmetric != NULL)) {
+			CU_ASSERT_EQUAL(
+				t1->fisheye.affine_matrix.symmetric,
+				t2->fisheye->affine_matrix->symmetric->value);
+		}
 		CU_ASSERT_PTR_NOT_NULL(t2->fisheye->polynomial);
 		CU_ASSERT_DOUBLE_EQUAL(t1->fisheye.polynomial.p2,
 				       t2->fisheye->polynomial->p2,
@@ -601,22 +610,38 @@ static void compare_vmeta_rectf_bounding(const struct vmeta_rectf *rect,
 
 void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 {
-	int err1, err2;
-	struct vmeta_location loc1, loc2;
-	struct vmeta_xy vec1, vec2;
-	struct vmeta_ned ned1, ned2;
-	struct vmeta_euler eul1, eul2;
-	struct vmeta_quaternion q1, q2;
-	float fl1, fl2;
-	double d1, d2;
-	uint8_t u8_1, u8_2;
-	uint16_t u16_1, u16_2;
-	uint32_t u32_1, u32_2;
-	uint64_t u64_1, u64_2;
-	int8_t i8_1, i8_2;
-	enum vmeta_flying_state s1, s2;
-	enum vmeta_piloting_mode m1, m2;
-	struct vmeta_rectf r1, r2;
+	int err1;
+	int err2;
+	struct vmeta_location loc1;
+	struct vmeta_location loc2;
+	struct vmeta_xy vec1;
+	struct vmeta_xy vec2;
+	struct vmeta_ned ned1;
+	struct vmeta_ned ned2;
+	struct vmeta_euler eul1;
+	struct vmeta_euler eul2;
+	struct vmeta_quaternion q1;
+	struct vmeta_quaternion q2;
+	float fl1;
+	float fl2;
+	double d1;
+	double d2;
+	uint8_t u8_1;
+	uint8_t u8_2;
+	uint16_t u16_1;
+	uint16_t u16_2;
+	uint32_t u32_1;
+	uint32_t u32_2;
+	uint64_t u64_1;
+	uint64_t u64_2;
+	int8_t i8_1;
+	int8_t i8_2;
+	enum vmeta_flying_state s1;
+	enum vmeta_flying_state s2;
+	enum vmeta_piloting_mode m1;
+	enum vmeta_piloting_mode m2;
+	struct vmeta_rectf r1;
+	struct vmeta_rectf r2;
 
 	CU_ASSERT_PTR_NOT_NULL(f1);
 	CU_ASSERT_PTR_NOT_NULL(f2);
@@ -817,7 +842,8 @@ void compare_vmeta_frame_getters(struct vmeta_frame *f1, struct vmeta_frame *f2)
 
 void compare_vmeta_frame_v3_getters(struct vmeta_frame *f)
 {
-	int err, expected;
+	int err;
+	int expected;
 	struct vmeta_location loc;
 	struct vmeta_ned ned;
 	struct vmeta_euler eul;
@@ -1006,7 +1032,8 @@ void compare_vmeta_frame_v3_getters(struct vmeta_frame *f)
 
 void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 {
-	int err, expected;
+	int err;
+	int expected;
 	struct vmeta_location loc;
 	struct vmeta_xy vec;
 	struct vmeta_ned ned;
@@ -1177,6 +1204,34 @@ void compare_vmeta_frame_proto_getters(struct vmeta_frame *f)
 	CU_ASSERT_EQUAL(err, expected);
 	if (err == 0)
 		CU_ASSERT_EQUAL(u16, proto->camera->iso_gain);
+
+	err = vmeta_frame_get_iso_speed(f, &u32);
+	expected = (proto->photo && proto->photo->iso_speed) ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		CU_ASSERT_EQUAL(u32, proto->photo->iso_speed);
+
+	err = vmeta_frame_get_black_level(f, &u16);
+	expected =
+		(proto->photo && proto->photo->raw_black_level) ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		CU_ASSERT_EQUAL(u16, proto->photo->raw_black_level);
+
+	err = vmeta_frame_get_white_level(f, &u16);
+	expected =
+		(proto->photo && proto->photo->raw_white_level) ? 0 : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		CU_ASSERT_EQUAL(u16, proto->photo->raw_white_level);
+
+	err = vmeta_frame_get_calibration_illuminant_1(f, &u16);
+	expected = (proto->photo && proto->photo->calibration_illuminant_1)
+			   ? 0
+			   : -ENOENT;
+	CU_ASSERT_EQUAL(err, expected);
+	if (err == 0)
+		CU_ASSERT_EQUAL(u16, proto->photo->calibration_illuminant_1);
 
 	err = vmeta_frame_get_awb_r_gain(f, &fl);
 	expected = proto->camera ? 0 : -ENOENT;

@@ -29,6 +29,7 @@
 
 #include <errno.h>
 #include <getopt.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,10 +42,19 @@
 ULOG_DECLARE_TAG(ULOG_TAG);
 
 
+#ifndef PATH_MAX
+#	ifdef _MAX_PATH
+#		define PATH_MAX _MAX_PATH
+#	else
+#		define PATH_MAX 4096
+#	endif
+#endif
+
+
 static int mp4_extract(struct vmeta_session *meta, struct mp4_demux *demux)
 {
 	int ret = 0;
-	unsigned int session_meta_count, k;
+	unsigned int session_meta_count;
 	char **keys = NULL;
 	char **values = NULL;
 
@@ -56,10 +66,10 @@ static int mp4_extract(struct vmeta_session *meta, struct mp4_demux *demux)
 		ULOG_ERRNO("mp4_demux_get_metadata_strings", -ret);
 		goto out;
 	}
-	for (k = 0; k < session_meta_count; k++) {
-		char *key = keys[k];
-		char *value = values[k];
-		if ((key) && (value)) {
+	for (unsigned int k = 0; k < session_meta_count; k++) {
+		const char *key = keys[k];
+		const char *value = values[k];
+		if (key && value) {
 			ret = vmeta_session_recording_read(key, value, meta);
 			if (ret < 0) {
 				ULOG_ERRNO("vmeta_session_recording_read",
@@ -80,6 +90,7 @@ int vmeta_extract(const char *path,
 		  struct mp4_demux *demux)
 {
 	int ret = 0;
+	size_t len;
 	int create_new_demuxer = !!(demux == NULL);
 	struct mp4_demux *demuxer = NULL;
 
@@ -91,8 +102,11 @@ int vmeta_extract(const char *path,
 		goto skip_mux_creation;
 	}
 
-	if (strncasecmp(path + strlen(path) - 4, ".mp4", 4)) {
-		ULOGE("invalid file %s", path);
+	len = strnlen(path, PATH_MAX);
+	if ((len >= PATH_MAX) || (len < 4) ||
+	    (strcasecmp(path + len - 4, ".mp4") != 0)) {
+		ULOGE("invalid file path %s",
+		      (len >= PATH_MAX) ? "too long" : path);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -133,6 +147,7 @@ out:
 int vmeta_extract_get_track_count(const char *path, struct mp4_demux *demux)
 {
 	int ret = 0;
+	size_t len;
 	int create_new_demuxer = !!(demux == NULL);
 	struct mp4_demux *demuxer = NULL;
 
@@ -143,8 +158,11 @@ int vmeta_extract_get_track_count(const char *path, struct mp4_demux *demux)
 		goto skip_mux_creation;
 	}
 
-	if (strncasecmp(path + strlen(path) - 4, ".mp4", 4)) {
-		ULOGE("invalid file %s", path);
+	len = strnlen(path, PATH_MAX);
+	if ((len >= PATH_MAX) || (len < 4) ||
+	    (strcasecmp(path + len - 4, ".mp4") != 0)) {
+		ULOGE("invalid file path %s",
+		      (len >= PATH_MAX) ? "too long" : path);
 		ret = -EINVAL;
 		goto out;
 	}
@@ -173,7 +191,7 @@ static int track_extract(struct vmeta_session *meta,
 			 struct mp4_demux *demux)
 {
 	int ret = 0;
-	unsigned int session_meta_count, k;
+	unsigned int session_meta_count;
 	char **keys = NULL;
 	char **values = NULL;
 	struct mp4_track_info track_info;
@@ -192,10 +210,10 @@ static int track_extract(struct vmeta_session *meta,
 		ULOG_ERRNO("mp4_demux_get_metadata_strings", -ret);
 		goto out;
 	}
-	for (k = 0; k < session_meta_count; k++) {
-		char *key = keys[k];
-		char *value = values[k];
-		if ((key) && (value)) {
+	for (unsigned int k = 0; k < session_meta_count; k++) {
+		const char *key = keys[k];
+		const char *value = values[k];
+		if (key && value) {
 			ret = vmeta_session_recording_read(key, value, meta);
 			if (ret < 0) {
 				ULOG_ERRNO("vmeta_session_recording_read",
@@ -223,6 +241,7 @@ int vmeta_extract_track(const char *path,
 			struct mp4_demux *demux)
 {
 	int ret = 0;
+	size_t len;
 	int create_new_demuxer = !!(demux == NULL);
 	struct mp4_demux *demuxer = NULL;
 	uint32_t track_count;
@@ -235,8 +254,11 @@ int vmeta_extract_track(const char *path,
 		goto skip_mux_creation;
 	}
 
-	if (strncasecmp(path + strlen(path) - 4, ".mp4", 4)) {
-		ULOGE("invalid file %s", path);
+	len = strnlen(path, PATH_MAX);
+	if ((len >= PATH_MAX) || (len < 4) ||
+	    (strcasecmp(path + len - 4, ".mp4") != 0)) {
+		ULOGE("invalid file path %s",
+		      (len >= PATH_MAX) ? "too long" : path);
 		ret = -EINVAL;
 		goto out;
 	}

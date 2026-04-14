@@ -28,6 +28,8 @@ syntax = "proto3";
 
 package vmeta;
 
+import "google/protobuf/wrappers.proto";
+
 option java_package = "com.parrot.drone.groundsdk.protobuf";
 option java_outer_classname = "VideoMetadata";
 
@@ -359,6 +361,46 @@ enum VideoStopReason {
 	VSR_INTERNAL_ERROR = 8;
 }
 
+enum PhotoMode {
+	/* Unknown photo mode */
+	PHOTO_MODE_UNKNOWN = 0;
+
+	/* Single photo mode */
+	PM_SINGLE = 1;
+
+	/* Bracketing photo mode */
+	PM_BRACKETING = 2;
+
+	/* Burst photo mode */
+	PM_BURST = 3;
+
+	/* Timelapse photo mode */
+	PM_TIMELAPSE = 4;
+
+	/* GPS-lapse photo mode */
+	PM_GPSLAPSE = 5;
+}
+
+enum PanoramaType {
+	/* Unknown panorama type */
+	PT_UNKNOWN = 0;
+
+	/* No panorama */
+	PT_NONE = 1;
+
+	/* Horizontal 180 panorama type */
+	PT_HORIZONTAL_180 = 2;
+
+	/* Vertical 180 panorama type */
+	PT_VERTICAL_180 = 3;
+
+	/* Spherical panorama type */
+	PT_SPHERICAL = 4;
+
+	/* Super wide panorama type */
+	PT_SUPER_WIDE = 5;
+}
+
 enum DynamicRange {
 	/* Unknown dynamic range */
 	DR_UNKNOWN = 0;
@@ -498,6 +540,98 @@ message ThermalSpot {
 	int32 value = 4;
 }
 
+/* Photo metadata */
+message PhotoMetadata {
+	/* Exposure parameters (EXIF) */
+
+	/* Exposure program */
+	uint32 exposure_program = 1;
+
+	/* ISO speed */
+	uint32 iso_speed = 2;
+
+	/* Exposure bias value (APEX) */
+	double exposure_bias_value = 3;
+
+	/* Metering mode */
+	uint32 metering_mode = 4;
+
+	/* Light source */
+	uint32 light_source = 5;
+
+	/* Exposure mode */
+	uint32 exposure_mode = 6;
+
+	/* White balance mode */
+	uint32 white_balance = 7;
+
+	/* Optics and Image (EXIF) */
+
+	/* Focal length (mm) */
+	double focal_length = 8;
+
+	/* Focal length in 35mm film (mm) */
+	double focal_length_in_35mm_film = 9;
+
+	/* F-number */
+	float f_number = 10;
+
+	/* Contrast processing */
+	uint32 contrast = 11;
+
+	/* Saturation processing */
+	uint32 saturation = 12;
+
+	/* Sharpness processing */
+	uint32 sharpness = 13;
+
+	/* RAW data (DNG) */
+
+	/* Black level */
+	uint32 raw_black_level = 14;
+
+	/* White level */
+	uint32 raw_white_level = 15;
+
+	/* Calibration illuminant 1 */
+	uint32 calibration_illuminant_1 = 16;
+
+	/* ColorMatrix1: A 3x3 matrix defining the transformation from
+         * CIE XYZ (D50) to the sensor's raw color space.
+         * Matrix 1 (Tungsten/2850K): Optimized for warm light
+         * and indoor scenes. */
+	repeated double color_matrix_1 = 17;
+
+	/* Dimensions and Resolution */
+
+	/* Pixel X dimension */
+	int32 pixel_x_dimension = 18;
+
+	/* Pixel Y dimension */
+	int32 pixel_y_dimension = 19;
+
+	/* Focal plane X resolution */
+	double focal_plane_x_resolution = 20;
+
+	/* Focal plane Y resolution */
+	double focal_plane_y_resolution = 21;
+
+	/* Lens ID */
+	uint32 lens_id = 22;
+
+	/* Unique media identifier of the photo; a media is a single or a group
+	 * of resources [1:N] (optional, can be 0) */
+	uint32 media_id = 23;
+
+	/* Resource index of the photo in the media ID; a resource is a media
+	 * file named using a pattern and a supported extension
+	 * (optional, can be 0) */
+	uint32 resource_index = 24;
+
+	/* Sequence number in a group of photos (optional, can be 0) */
+	uint32 sequence_number = 25;
+}
+
 
 /**
  * Actual messages
@@ -554,6 +688,10 @@ message DroneMetadata {
 message CameraMetadata {
 	/* Frame capture timestamp (us, monotonic) */
 	uint64 timestamp = 1;
+
+	/* Camera serial number; when not empty, this value overrides the one
+	 * from session metadata */
+	string serial_number = 19;
 
 	/* Frame capture UTC timestamp (us since the Epoch) */
 	uint64 utc_timestamp = 10;
@@ -794,6 +932,8 @@ message CameraModel {
 			float d = 2;
 			float e = 3;
 			float f = 4;
+			/* If symmetric affine matrix should be used */
+			google.protobuf.BoolValue symmetric = 5;
 		}
 		AffineMatrix affine_matrix = 1;
 
@@ -900,6 +1040,9 @@ message TimedMetadata {
 
 	/* User defined metadata */
 	repeated UserMetadata user = 9;
+
+	/* Photo-specific metadata */
+	PhotoMetadata photo = 10;
 }
 
 message SessionMetadata {
@@ -993,7 +1136,9 @@ message SessionMetadata {
 	/* Overlay */
 	Overlay overlay = 38;
 
-	/* Camera principal point normalized coordinates in picture [0; 1] */
+	/* Camera principal point.
+	 * Normalized coordinates in picture [0; 1] for video;
+	 * In mm for photo */
 	Vector2 principal_point = 28;
 
 	/* Video mode */
@@ -1001,6 +1146,18 @@ message SessionMetadata {
 
 	/* Video stop reason */
 	VideoStopReason video_stop_reason = 30;
+
+	/* Photo mode */
+	PhotoMode photo_mode = 39;
+
+	/* Panorama type */
+	PanoramaType panorama_type = 40;
+
+	/* Expected number of photos in the sequence */
+	uint32 photo_count = 41;
+
+	/* Common name of the drone certificate used to sign the picture file */
+	string secure_cn = 42;
 
 	/* Image dynamic range */
 	DynamicRange dynamic_range = 31;

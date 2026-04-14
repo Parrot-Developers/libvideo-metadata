@@ -43,7 +43,7 @@ int vmeta_json_proto_add_timed_metadata(struct json_object *jobj,
 			     "links",
 			     (union array_element_type *)timed->links,
 			     timed->n_links,
-			     vmeta_json_proto_add_link_metadata);
+			     &vmeta_json_proto_add_link_metadata);
 	vmeta_json_proto_add_tracking_metadata(
 		jobj, "tracking", timed->tracking);
 	vmeta_json_proto_add_tracking_proposal_metadata(
@@ -55,12 +55,12 @@ int vmeta_json_proto_add_timed_metadata(struct json_object *jobj,
 			     "lfic",
 			     (union array_element_type *)timed->lfic,
 			     timed->n_lfic,
-			     vmeta_json_proto_add_lfic_metadata);
+			     &vmeta_json_proto_add_lfic_metadata);
 	vmeta_json_add_array(jobj,
 			     "user",
 			     (union array_element_type *)timed->user,
 			     timed->n_user,
-			     vmeta_json_proto_add_user_metadata);
+			     &vmeta_json_proto_add_user_metadata);
 out:
 	return res;
 }
@@ -353,7 +353,7 @@ void vmeta_json_proto_add_starfish_link_metadata(
 			     "links",
 			     (union array_element_type *)starfish->links,
 			     starfish->n_links,
-			     vmeta_json_proto_add_starfish_link_info);
+			     &vmeta_json_proto_add_starfish_link_info);
 	vmeta_json_add_int(jobj_starfish, "quality", starfish->quality);
 
 	json_object_object_add(jobj, name, jobj_starfish);
@@ -477,7 +477,7 @@ void vmeta_json_proto_add_tracking_proposal_metadata(
 			     "proposals",
 			     (union array_element_type *)proposal->proposals,
 			     proposal->n_proposals,
-			     vmeta_json_proto_add_bounding_box);
+			     &vmeta_json_proto_add_bounding_box);
 	vmeta_json_add_int64(jobj_proposal, "timestamp", proposal->timestamp);
 
 	json_object_object_add(jobj, name, jobj_proposal);

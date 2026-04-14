@@ -131,9 +131,9 @@ vmeta_session_proto_get_unpacked_rw(struct vmeta_session_proto *meta,
  * @param proto_meta: pointer to the protobuf structure
  * @return 0 on success, negative errno on error.
  */
-VMETA_API int
-vmeta_session_proto_release_unpacked_rw(struct vmeta_session_proto *meta,
-					Vmeta__SessionMetadata *proto_meta);
+VMETA_API int vmeta_session_proto_release_unpacked_rw(
+	struct vmeta_session_proto *meta,
+	const Vmeta__SessionMetadata *proto_meta);
 
 /**
  * Get the packed protobuf data representing this metadata.
@@ -300,6 +300,15 @@ vmeta_session_proto_get_fisheye_camera_model_affine_matrix(
 	Vmeta__CameraModel__FisheyeCameraModel *fisheye);
 
 /**
+ * Get the Symmetric part of a AffineMatrix, creating it if required.
+ * @param fisheye: the AffineMatrix
+ * @return A pointer to the Symmetric, or NULL on error.
+ */
+VMETA_API Google__Protobuf__BoolValue *
+vmeta_session_proto_get_fisheye_camera_model_affine_matrix_symmetric(
+	Vmeta__CameraModel__FisheyeCameraModel__AffineMatrix *affine_matrix);
+
+/**
  * Get the Polynomial part of a FisheyeCameraModel, creating it if required.
  * @param fisheye: the FisheyeCameraModel
  * @return A pointer to the Polynomial, or NULL on error.
@@ -395,5 +404,40 @@ vmeta_session_dynamic_range_vmeta_to_proto(enum vmeta_dynamic_range range);
 VMETA_API Vmeta__ToneMapping
 vmeta_session_tone_mapping_vmeta_to_proto(enum vmeta_tone_mapping mapping);
 
+/**
+ * Convert a vmeta_photo_mode enum into its Vmeta__PhotoMode equivalent.
+ *
+ * @param mode: photo mode to convert
+ * @return The converted photo mode
+ */
+VMETA_API Vmeta__PhotoMode
+vmeta_session_photo_mode_vmeta_to_proto(enum vmeta_photo_mode mode);
+
+/**
+ * Convert a Vmeta__PhotoMode enum into its vmeta_photo_mode equivalent.
+ *
+ * @param mode: photo mode to convert
+ * @return The converted photo mode
+ */
+VMETA_API enum vmeta_photo_mode
+vmeta_session_photo_mode_proto_to_vmeta(Vmeta__PhotoMode mode);
+
+/**
+ * Convert a vmeta_panorama_type enum into its Vmeta__PanoramaType equivalent.
+ *
+ * @param type: panorama type to convert
+ * @return The converted panorama type
+ */
+VMETA_API Vmeta__PanoramaType
+vmeta_session_panorama_type_vmeta_to_proto(enum vmeta_panorama_type type);
+
+/**
+ * Convert a Vmeta__PanoramaType enum into its vmeta_panorama_type equivalent.
+ *
+ * @param type: panorama type to convert
+ * @return The converted panorama type
+ */
+VMETA_API enum vmeta_panorama_type
+vmeta_session_panorama_type_proto_to_vmeta(Vmeta__PanoramaType type);
 
 #endif /* !_VMETA_SESSION_PROTO_H_ */

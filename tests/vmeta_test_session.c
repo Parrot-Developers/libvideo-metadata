@@ -42,15 +42,15 @@ static struct vmeta_session_test_size {
 	char comment[100];
 	char copyright[80];
 	uint64_t media_date;
-	long media_date_gmtoff;
+	int32_t media_date_gmtoff;
 	uint64_t run_date;
-	long run_date_gmtoff;
+	int32_t run_date_gmtoff;
 	char run_id[33];
 	uint64_t boot_date;
-	long boot_date_gmtoff;
+	int32_t boot_date_gmtoff;
 	char boot_id[33];
 	uint64_t flight_date;
-	long flight_date_gmtoff;
+	int32_t flight_date_gmtoff;
 	char flight_id[33];
 	char custom_id[80];
 	struct vmeta_location takeoff_loc;
@@ -68,6 +68,10 @@ static struct vmeta_session_test_size {
 	struct vmeta_principal_point principal_point;
 	enum vmeta_video_mode video_mode;
 	enum vmeta_video_stop_reason video_stop_reason;
+	enum vmeta_photo_mode photo_mode;
+	enum vmeta_panorama_type panorama_type;
+	uint32_t photo_count;
+	char secure_cn[VMETA_SESSION_SECURE_CN_MAX_LEN];
 	enum vmeta_dynamic_range dynamic_range;
 	enum vmeta_tone_mapping tone_mapping;
 	uint64_t first_frame_capture_ts;
@@ -77,26 +81,31 @@ static struct vmeta_session_test_size {
 } s_vmeta_session_test_size;
 
 
+#define NULL_TERMINATE(f) (f)[sizeof(f) - 1] = '\0'
+
 static void fill_vmeta_with(struct vmeta_session *meta, int val)
 {
 	memset(meta, val, sizeof(*meta));
-	meta->friendly_name[39] = '\0';
-	meta->maker[39] = '\0';
-	meta->model[39] = '\0';
-	meta->model_id[4] = '\0';
-	meta->serial_number[31] = '\0';
-	meta->software_version[19] = '\0';
-	meta->build_id[79] = '\0';
-	meta->title[79] = '\0';
-	meta->comment[99] = '\0';
-	meta->copyright[79] = '\0';
-	meta->run_id[32] = '\0';
-	meta->boot_id[32] = '\0';
-	meta->flight_id[32] = '\0';
-	meta->custom_id[79] = '\0';
-	meta->camera_serial_number[sizeof(meta->camera_serial_number) - 1] =
-		'\0';
+
+	NULL_TERMINATE(meta->friendly_name);
+	NULL_TERMINATE(meta->maker);
+	NULL_TERMINATE(meta->model);
+	NULL_TERMINATE(meta->model_id);
+	NULL_TERMINATE(meta->serial_number);
+	NULL_TERMINATE(meta->software_version);
+	NULL_TERMINATE(meta->build_id);
+	NULL_TERMINATE(meta->title);
+	NULL_TERMINATE(meta->comment);
+	NULL_TERMINATE(meta->copyright);
+	NULL_TERMINATE(meta->run_id);
+	NULL_TERMINATE(meta->boot_id);
+	NULL_TERMINATE(meta->flight_id);
+	NULL_TERMINATE(meta->custom_id);
+	NULL_TERMINATE(meta->camera_serial_number);
+	NULL_TERMINATE(meta->secure_cn);
 }
+
+#undef NULL_TERMINATE
 
 
 /* Here only to fail if a vmeta_session field is added without modifying the
@@ -268,15 +277,12 @@ static void compare_session_proto(const Vmeta__SessionMetadata *proto,
 	CU_ASSERT_STRING_EQUAL(proto->comment, meta->comment);
 	CU_ASSERT_STRING_EQUAL(proto->copyright, meta->copyright);
 	CU_ASSERT_EQUAL(proto->media_date, meta->media_date);
-	CU_ASSERT_EQUAL(proto->media_date_gmtoff,
-			(int32_t)meta->media_date_gmtoff);
+	CU_ASSERT_EQUAL(proto->media_date_gmtoff, meta->media_date_gmtoff);
 	CU_ASSERT_EQUAL(proto->boot_date, meta->boot_date);
-	CU_ASSERT_EQUAL(proto->boot_date_gmtoff,
-			(int32_t)meta->boot_date_gmtoff);
+	CU_ASSERT_EQUAL(proto->boot_date_gmtoff, meta->boot_date_gmtoff);
 	CU_ASSERT_STRING_EQUAL(proto->boot_id, meta->boot_id);
 	CU_ASSERT_EQUAL(proto->flight_date, meta->flight_date);
-	CU_ASSERT_EQUAL(proto->flight_date_gmtoff,
-			(int32_t)meta->flight_date_gmtoff);
+	CU_ASSERT_EQUAL(proto->flight_date_gmtoff, meta->flight_date_gmtoff);
 	CU_ASSERT_STRING_EQUAL(proto->flight_id, meta->flight_id);
 	CU_ASSERT_STRING_EQUAL(proto->custom_id, meta->custom_id);
 	/* takeoff loc */
@@ -323,6 +329,14 @@ static void compare_session_proto(const Vmeta__SessionMetadata *proto,
 			vmeta_session_dynamic_range_vmeta_to_proto(
 				meta->dynamic_range));
 	CU_ASSERT_EQUAL(
+		proto->photo_mode,
+		vmeta_session_photo_mode_vmeta_to_proto(meta->photo_mode));
+	CU_ASSERT_EQUAL(proto->panorama_type,
+			vmeta_session_panorama_type_vmeta_to_proto(
+				meta->panorama_type));
+	CU_ASSERT_EQUAL(proto->photo_count, meta->photo_count);
+	CU_ASSERT_STRING_EQUAL(proto->secure_cn, meta->secure_cn);
+	CU_ASSERT_EQUAL(
 		proto->tone_mapping,
 		vmeta_session_tone_mapping_vmeta_to_proto(meta->tone_mapping));
 	CU_ASSERT_EQUAL(proto->first_frame_capture_ts,
@@ -337,6 +351,7 @@ static void compare_session_proto(const Vmeta__SessionMetadata *proto,
 static void test_session_proto_api()
 {
 	int ret;
+	ssize_t ret2;
 	const uint8_t *data;
 	size_t len;
 	size_t packed_len;
@@ -359,8 +374,8 @@ static void test_session_proto_api()
 	ret = vmeta_session_to_proto(NULL, &meta_proto);
 	CU_ASSERT_EQUAL(ret, -EINVAL);
 
-	ret = vmeta_session_proto_get_packed_size(NULL);
-	CU_ASSERT_EQUAL(ret, -EINVAL);
+	ret2 = vmeta_session_proto_get_packed_size(NULL);
+	CU_ASSERT_EQUAL(ret2, -EINVAL);
 
 	ret = vmeta_session_proto_get_buffer(NULL, NULL, NULL);
 	CU_ASSERT_EQUAL(ret, -EINVAL);
@@ -432,9 +447,9 @@ static void test_session_proto_api()
 	ret = vmeta_session_to_proto(&meta, &meta_proto);
 	CU_ASSERT_EQUAL(ret, 0);
 
-	ret = vmeta_session_proto_get_packed_size(meta_proto);
-	CU_ASSERT(ret > 0);
-	packed_len = ret;
+	ret2 = vmeta_session_proto_get_packed_size(meta_proto);
+	CU_ASSERT(ret2 > 0);
+	packed_len = ret2;
 
 	/* ro packed buffer */
 	ret = vmeta_session_proto_get_buffer(meta_proto, &data, &len);
@@ -467,11 +482,39 @@ static void test_session_proto_api()
 }
 
 
+static void test_session_date_write(void)
+{
+	ssize_t ret;
+	char date[VMETA_SESSION_DATE_MAX_LEN];
+	uint64_t timestamp = 1706367600; /* 27 Jan 2024 */
+	int32_t gmtoff = 3600; /* UTC+1 */
+
+	ret = vmeta_session_date_write(NULL, sizeof(date), timestamp, gmtoff);
+	CU_ASSERT_EQUAL(ret, -EINVAL);
+
+	ret = vmeta_session_date_write(date, 0, timestamp, gmtoff);
+	CU_ASSERT_EQUAL(ret, -EINVAL);
+
+	ret = vmeta_session_date_write(date, 5, timestamp, gmtoff);
+	CU_ASSERT_EQUAL(ret, -ENOBUFS);
+
+	memset(date, 0, sizeof(date));
+	ret = vmeta_session_date_write(date, sizeof(date), timestamp, gmtoff);
+
+	CU_ASSERT_TRUE(ret > 0);
+	CU_ASSERT_TRUE((size_t)ret < sizeof(date));
+	/* Check that string looks like a date */
+	CU_ASSERT_PTR_NOT_NULL(strchr(date, ':'));
+	CU_ASSERT_EQUAL(ret, (ssize_t)strlen(date));
+}
+
+
 CU_TestInfo s_session_tests[] = {
 	{(char *)"session_size", &test_session_size},
 	{(char *)"session_cmp", &test_session_cmp},
 	{(char *)"session_merge_metadata", &test_session_merge_metadata},
 	{(char *)"session_is_valid", &test_session_is_valid},
 	{(char *)"session_proto_api", &test_session_proto_api},
+	{(char *)"session_date_write", &test_session_date_write},
 	CU_TEST_INFO_NULL,
 };

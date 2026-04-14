@@ -121,7 +121,7 @@ vmeta_frame_proto_get_unpacked_rw(struct vmeta_frame *meta,
  */
 VMETA_API int
 vmeta_frame_proto_release_unpacked_rw(struct vmeta_frame *meta,
-				      Vmeta__TimedMetadata *proto_meta);
+				      const Vmeta__TimedMetadata *proto_meta);
 
 /**
  * Get the packed protobuf data representing this metadata.
@@ -452,6 +452,26 @@ vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic);
 VMETA_API Vmeta__UserMetadata *
 vmeta_frame_proto_get_user_by_index(Vmeta__TimedMetadata *meta, size_t index);
 
+
+/**
+ * Get the color_matrix_1 part of a PhotoMetadata, creating it if required.
+ * @param meta: the PhotoMetadata
+ * @param index: index of the color_matrix_1 to get
+ * @return A pointer to the color_matrix_1, or NULL on error.
+ */
+VMETA_API double *
+vmeta_frame_proto_get_color_matrix_1_by_index(Vmeta__PhotoMetadata *photo,
+					      size_t index);
+
+
+/**
+ * Get the PhotoMetadata part of a TimedMetadata (root metadata), creating it
+ * if required.
+ * @param meta: the TimedMetadata
+ * @return A pointer to the PhotoMetadata, or NULL on error.
+ */
+VMETA_API Vmeta__PhotoMetadata *
+vmeta_frame_proto_get_photo(Vmeta__TimedMetadata *meta);
 
 /**
  * Enum converters
