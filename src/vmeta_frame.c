@@ -515,7 +515,7 @@ out:
 }
 
 
-int vmeta_frame_get_ref_count(struct vmeta_frame *meta)
+int vmeta_frame_get_ref_count(const struct vmeta_frame *meta)
 {
 	unsigned int ref;
 	ULOG_ERRNO_RETURN_ERR_IF(!meta, EINVAL);
@@ -759,7 +759,7 @@ int vmeta_frame_ext_timestamp_write(
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_EXT_TIMESTAMP_ID));
 	CHECK(vmeta_write_u16(buf, len));
@@ -851,8 +851,9 @@ int vmeta_frame_ext_followme_write(struct vmeta_buffer *buf,
 	CHECK(vmeta_write_f64_i32(buf, target.longitude, 22));
 	CHECK(vmeta_write_f64_i32(buf, target.altitude_egm96amsl, 16));
 
-	mode = meta->enabled | (meta->mode << 1) | (meta->angle_locked << 2);
-	anim = meta->animation;
+	mode = (uint8_t)(((uint8_t)meta->enabled) | ((uint8_t)meta->mode << 1) |
+			 ((uint8_t)meta->angle_locked << 2));
+	anim = (uint8_t)meta->animation;
 	CHECK(vmeta_write_u8(buf, mode));
 	CHECK(vmeta_write_u8(buf, anim));
 	CHECK(vmeta_write_u8(buf, reserved1));
@@ -870,7 +871,7 @@ int vmeta_frame_ext_followme_write(struct vmeta_buffer *buf,
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_EXT_FOLLOWME_ID));
 	CHECK(vmeta_write_u16(buf, len));
@@ -992,9 +993,10 @@ int vmeta_frame_ext_automation_write(
 	CHECK(vmeta_write_f64_i32(
 		buf, flight_destination.altitude_egm96amsl, 16));
 
-	anim = meta->animation;
-	flags = meta->followme_enabled | (meta->lookatme_enabled << 1) |
-		(meta->angle_locked << 2);
+	anim = (uint8_t)meta->animation;
+	flags = (uint8_t)(((uint8_t)meta->followme_enabled) |
+			  ((uint8_t)meta->lookatme_enabled << 1) |
+			  ((uint8_t)meta->angle_locked << 2));
 	CHECK(vmeta_write_u8(buf, anim));
 	CHECK(vmeta_write_u8(buf, flags));
 	CHECK(vmeta_write_u16(buf, reserved));
@@ -1009,7 +1011,7 @@ int vmeta_frame_ext_automation_write(
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_EXT_AUTOMATION_ID));
 	CHECK(vmeta_write_u16(buf, len));
@@ -1128,8 +1130,8 @@ int vmeta_frame_ext_thermal_write(struct vmeta_buffer *buf,
 	CHECK(vmeta_write_f32_i16(buf, meta->probe.temp, 5));
 	CHECK(vmeta_write_u8(buf, (uint8_t)meta->calib_state));
 
-	flags = meta->min.valid | (meta->max.valid << 1) |
-		(meta->probe.valid << 2);
+	flags = (uint8_t)((meta->min.valid) | (meta->max.valid << 1) |
+			  (meta->probe.valid << 2));
 	CHECK(vmeta_write_u8(buf, flags));
 
 	/* Check for correct alignment */
@@ -1142,7 +1144,7 @@ int vmeta_frame_ext_thermal_write(struct vmeta_buffer *buf,
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_EXT_THERMAL_ID));
 	CHECK(vmeta_write_u16(buf, len));
@@ -1259,7 +1261,7 @@ int vmeta_frame_ext_lfic_write(struct vmeta_buffer *buf,
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_EXT_LFIC_ID));
 	CHECK(vmeta_write_u16(buf, len));
@@ -1335,7 +1337,7 @@ out:
 }
 
 
-int vmeta_frame_convert(struct vmeta_frame *in_frame,
+int vmeta_frame_convert(const struct vmeta_frame *in_frame,
 			struct vmeta_frame **out_frame,
 			enum vmeta_frame_type out_type)
 {
@@ -1384,7 +1386,7 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 
 	/* Convert v3.base */
 	{
-		struct vmeta_frame_v3_base *base = &in_frame->v3.base;
+		const struct vmeta_frame_v3_base *base = &in_frame->v3.base;
 		/* drone quat */
 		quat = vmeta_frame_proto_get_drone_quat(drone);
 		if (quat == NULL)
@@ -1455,9 +1457,9 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 		/* awb_b_gain */
 		camera->awb_b_gain = base->awb_b_gain;
 		/* picture_hfov, deg->rad */
-		camera->hfov = base->picture_hfov * M_PI / 180.;
+		camera->hfov = base->picture_hfov * (float)M_PI / 180.0f;
 		/* picture_vfov, deg->rad */
-		camera->vfov = base->picture_vfov * M_PI / 180.;
+		camera->vfov = base->picture_vfov * (float)M_PI / 180.0f;
 		/* zoom level */
 		camera->zoom_level = NAN;
 		/* link_goodput */
@@ -1484,7 +1486,7 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 
 	/* Convert v3.automation */
 	if (in_frame->v3.has_automation) {
-		struct vmeta_frame_ext_automation *automationv3 =
+		const struct vmeta_frame_ext_automation *automationv3 =
 			&in_frame->v3.automation;
 		automation = vmeta_frame_proto_get_automation(proto);
 		if (automation == NULL)
@@ -1563,7 +1565,7 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 
 	/* Convert v3.thermal */
 	if (in_frame->v3.has_thermal) {
-		struct vmeta_frame_ext_thermal *thermalv3 =
+		const struct vmeta_frame_ext_thermal *thermalv3 =
 			&in_frame->v3.thermal;
 		thermal = vmeta_frame_proto_get_thermal(proto);
 		if (thermal == NULL)
@@ -1606,7 +1608,7 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 
 	/* Convert v3.lfic */
 	if (in_frame->v3.has_lfic) {
-		struct vmeta_frame_ext_lfic *lficv3 = &in_frame->v3.lfic;
+		const struct vmeta_frame_ext_lfic *lficv3 = &in_frame->v3.lfic;
 		lfic = vmeta_frame_proto_get_lfic_by_index(proto, 0);
 		if (lfic == NULL)
 			goto out;
@@ -1633,8 +1635,10 @@ int vmeta_frame_convert(struct vmeta_frame *in_frame,
 				loc->altitude_egm96amsl = DBL_MIN;
 			loc->latitude = lficv3->target_location.latitude;
 			loc->longitude = lficv3->target_location.longitude;
-			loc->horizontal_accuracy = lficv3->estimated_precision;
-			loc->vertical_accuracy = lficv3->estimated_precision;
+			loc->horizontal_accuracy =
+				(float)lficv3->estimated_precision;
+			loc->vertical_accuracy =
+				(float)lficv3->estimated_precision;
 			loc->sv_count = lficv3->target_location.sv_count;
 		}
 		/* grid_precision */

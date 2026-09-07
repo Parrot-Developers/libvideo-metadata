@@ -1004,7 +1004,6 @@ int vmeta_session_proto_get_unpacked_rw(struct vmeta_session_proto *meta,
 
 	ULOG_ERRNO_RETURN_ERR_IF(!meta, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(!proto_meta, EINVAL);
-	;
 
 	pthread_mutex_lock(&meta->lock);
 

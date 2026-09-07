@@ -137,6 +137,81 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 }
 
 
+void vmeta_quat_to_euler_zyx(const struct vmeta_quaternion *quat,
+			     struct vmeta_euler *euler)
+{
+	if ((quat == NULL) || (euler == NULL))
+		return;
+
+	if ((quat->w == 0) && (quat->x == 0) && (quat->y == 0) &&
+	    (quat->z == 0)) {
+		euler->psi = NAN;
+		euler->theta = NAN;
+		euler->phi = NAN;
+		return;
+	}
+
+	float w;
+	float x;
+	float y;
+	float z;
+	float sqw;
+	float sqx;
+	float sqy;
+	float sqz;
+	float psign;
+	float s2;
+
+	w = quat->w;
+	x = quat->x;
+	y = quat->y;
+	z = quat->z;
+	sqw = w * w;
+	sqx = x * x;
+	sqy = y * y;
+	sqz = z * z;
+	psign = -1.f;
+	s2 = 2.f * (w * y - z * x);
+
+	/* Test singularities */
+	if (s2 < (-1.f + SINGULARITY_RADIUS)) {
+		euler->psi = 0.f;
+		euler->theta = (float)-M_PI / 2.f;
+		euler->phi = atan2f(2.f * (psign * z * y + w * x),
+				    sqw + sqy - sqz - sqx);
+
+		euler->psi = -(euler->phi) * psign;
+		euler->phi = 0.f;
+	} else if (s2 > (1.f - SINGULARITY_RADIUS)) {
+		euler->psi = 0.f;
+		euler->theta = (float)M_PI / 2.f;
+		euler->phi = atan2f(2.f * (psign * z * y + w * x),
+				    sqw + sqy - sqz - sqx);
+
+		euler->psi = (euler->phi) * psign;
+		euler->phi = 0.f;
+	} else {
+		euler->psi = -atan2f(-2.f * (w * z - psign * y * x),
+				     sqw + sqx - sqz - sqy);
+		euler->theta = asinf(s2);
+		euler->phi = atan2f(2.f * (w * x - psign * z * y),
+				    sqw + sqz - sqy - sqx);
+	}
+
+	if (fabsf(euler->phi) > M_PI / 2.f) {
+		if (euler->theta > 0.f)
+			euler->theta = (float)M_PI - euler->theta;
+		else
+			euler->theta = (float)-M_PI - euler->theta;
+
+		euler->phi = (euler->phi > 0.f) ? euler->phi - (float)M_PI
+						: euler->phi + (float)M_PI;
+		euler->psi = (euler->psi > 0.f) ? euler->psi - (float)M_PI
+						: euler->psi + (float)M_PI;
+	}
+}
+
+
 static inline char encode_char(unsigned char val)
 {
 	if (val <= 25)

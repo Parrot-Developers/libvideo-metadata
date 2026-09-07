@@ -254,6 +254,16 @@ vmeta_frame_proto_get_drone(Vmeta__TimedMetadata *meta);
 VMETA_API Vmeta__Location *
 vmeta_frame_proto_get_drone_location(Vmeta__DroneMetadata *drone);
 
+
+/**
+ * Get the battery voltage part of a DroneMetadata, creating it if required.
+ * @param drone: the DroneMetadata
+ * @return A pointer to the battery voltage, or NULL on error.
+ */
+VMETA_API Google__Protobuf__FloatValue *
+vmeta_frame_proto_get_drone_battery_voltage(Vmeta__DroneMetadata *drone);
+
+
 /**
  * Get the Quaternion part of a DroneMetadata, creating it if required.
  * @param drone: the DroneMetadata
@@ -465,6 +475,15 @@ vmeta_frame_proto_get_color_matrix_1_by_index(Vmeta__PhotoMetadata *photo,
 
 
 /**
+ * Get the CameraModel part of a PhotoMetadata, creating it if required.
+ * @param photo_meta: the PhotoMetadata
+ * @return A pointer to the CameraModel, or NULL on error.
+ */
+VMETA_API Vmeta__CameraModel *
+vmeta_frame_proto_get_camera_model(Vmeta__PhotoMetadata *photo_meta);
+
+
+/**
  * Get the PhotoMetadata part of a TimedMetadata (root metadata), creating it
  * if required.
  * @param meta: the TimedMetadata
@@ -510,6 +529,7 @@ vmeta_frame_piloting_mode_proto_to_vmeta(Vmeta__PilotingMode mode);
  * @param type: type to convert
  * @return The converted lfic type
  */
+VMETA_API
 enum vmeta_lfic_type vmeta_frame_lfic_type_proto_to_vmeta(Vmeta__LficType type);
 
 /**
@@ -518,6 +538,7 @@ enum vmeta_lfic_type vmeta_frame_lfic_type_proto_to_vmeta(Vmeta__LficType type);
  * @param type: type to convert
  * @return The converted lfic type
  */
+VMETA_API
 Vmeta__LficType vmeta_frame_lfic_type_vmeta_to_proto(enum vmeta_lfic_type type);
 
 /**

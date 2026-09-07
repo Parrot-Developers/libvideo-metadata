@@ -333,7 +333,7 @@ void vmeta_json_proto_add_starfish_link_info(
 	else if (json_object_get_type(jobj) == json_type_array)
 		json_object_array_add(jobj, jobj_starfish_info);
 	else
-		free(jobj_starfish_info);
+		json_object_put(jobj_starfish_info);
 }
 
 
@@ -392,7 +392,7 @@ void vmeta_json_proto_add_link_metadata(struct json_object *jobj,
 	else if (json_object_get_type(jobj) == json_type_array)
 		json_object_array_add(jobj, jobj_link);
 	else
-		free(jobj_link);
+		json_object_put(jobj_link);
 }
 
 
@@ -428,7 +428,7 @@ void vmeta_json_proto_add_bounding_box(struct json_object *jobj,
 	else if (json_object_get_type(jobj) == json_type_array)
 		json_object_array_add(jobj, jobj_bbox);
 	else
-		free(jobj_bbox);
+		json_object_put(jobj_bbox);
 }
 
 
@@ -592,7 +592,7 @@ void vmeta_json_proto_add_lfic_metadata(struct json_object *jobj,
 	else if (json_object_get_type(jobj) == json_type_array)
 		json_object_array_add(jobj, jobj_lfic);
 	else
-		free(jobj_lfic);
+		json_object_put(jobj_lfic);
 }
 
 
@@ -611,7 +611,7 @@ void vmeta_json_proto_add_user_metadata(struct json_object *jobj,
 	jobj_user = json_object_new_object();
 	vmeta_json_add_int64(jobj_user, "timestamp", user->timestamp);
 	vmeta_json_add_int(jobj_user, "uid_hash", user->uid_hash);
-	vmeta_json_add_int(jobj_user, "len", user->data.len);
+	vmeta_json_add_int64(jobj_user, "len", user->data.len);
 	if (user->data.data != NULL && user->data.len > 0) {
 		err = vmeta_base64_encode(
 			user->data.data, user->data.len, &base64_data);
@@ -630,7 +630,7 @@ void vmeta_json_proto_add_user_metadata(struct json_object *jobj,
 	else if (json_object_get_type(jobj) == json_type_array)
 		json_object_array_add(jobj, jobj_user);
 	else
-		free(jobj_user);
+		json_object_put(jobj_user);
 }
 
 

@@ -81,7 +81,7 @@ int vmeta_frame_v1_streaming_basic_write(
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_V1_STREAMING_ID));
 	CHECK(vmeta_write_u16(buf, len));
@@ -301,7 +301,7 @@ int vmeta_frame_v1_streaming_extended_write(
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_V1_STREAMING_ID));
 	CHECK(vmeta_write_u16(buf, len));

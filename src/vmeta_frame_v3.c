@@ -125,7 +125,7 @@ int vmeta_frame_v3_write(struct vmeta_buffer *buf,
 
 	/* Write id and length */
 	end = buf->pos;
-	len = (buf->pos - start - 4) / 4;
+	len = (uint16_t)(buf->pos - start - 4) / 4;
 	buf->pos = start;
 	CHECK(vmeta_write_u16(buf, VMETA_FRAME_V3_BASE_ID));
 	CHECK(vmeta_write_u16(buf, len));

@@ -30,9 +30,15 @@ ULOG_DECLARE_TAG(ULOG_TAG);
 
 static CU_SuiteInfo s_suites[] = {
 	{(char *)"vmeta frame protobuf", NULL, NULL, s_proto_tests},
+	{(char *)"vmeta frame v1", NULL, NULL, s_v1_tests},
+	{(char *)"vmeta frame v2", NULL, NULL, s_v2_tests},
 	{(char *)"vmeta frame v3", NULL, NULL, s_v3_tests},
 	{(char *)"vmeta session", NULL, NULL, s_session_tests},
 	{(char *)"vmeta utils", NULL, NULL, s_utils_tests},
+	{(char *)"vmeta csv", NULL, NULL, s_csv_tests},
+	{(char *)"vmeta proto camera subtype", NULL, NULL, s_proto_conv_tests},
+	{(char *)"vmeta json", NULL, NULL, s_json_tests},
+	{(char *)"vmeta photo", NULL, NULL, s_photo_tests},
 	CU_SUITE_INFO_NULL,
 };
 

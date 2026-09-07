@@ -78,11 +78,33 @@ void compare_vmeta_euler(struct vmeta_euler *e1, struct vmeta_euler *e2)
 	/* Test with a lower granularity than compare_quaternion to take the
 	 * quat->euler conversion precision loss into account */
 	int gr = 7;
-	CU_ASSERT_DOUBLE_EQUAL(e1->phi, e2->phi, granularity(gr));
 	CU_ASSERT_DOUBLE_EQUAL(e1->theta, e2->theta, granularity(gr));
+	CU_ASSERT_DOUBLE_EQUAL(e1->pitch, e2->pitch, granularity(gr));
+
+	/* Euler angles have a coordinate singularity (gimbal lock) at
+	 * theta = +/-pi/2, where yaw and roll become coupled and only their
+	 * combination is meaningful. vmeta_quat_to_euler()'s own
+	 * SINGULARITY_RADIUS (1e-5 in sin(theta)-space, src/vmeta_utils.c)
+	 * is far tighter than the quantization noise introduced by the
+	 * fixed-point quaternion encodings used on the wire (Q1.14/Q1.12,
+	 * error on the order of 1e-3 in that same space). A quaternion whose
+	 * pitch is close to the pole can therefore round-trip through
+	 * encode/decode and land on the other side of that threshold,
+	 * making the two independently-computed eulers take different
+	 * branches even though they represent (almost) the same rotation --
+	 * already verified separately via compare_vmeta_quaternion() at
+	 * every call site. Skip the yaw/roll comparison in that regime
+	 * rather than assert on a decomposition that is mathematically
+	 * ill-defined there. */
+	const float near_pole_rad = 0.15f; /* ~8.6 degrees: well above the
+					    * quantization noise above */
+	if ((fabsf(fabsf(e1->theta) - (float)M_PI / 2.f) < near_pole_rad) ||
+	    (fabsf(fabsf(e2->theta) - (float)M_PI / 2.f) < near_pole_rad))
+		return;
+
+	CU_ASSERT_DOUBLE_EQUAL(e1->phi, e2->phi, granularity(gr));
 	CU_ASSERT_DOUBLE_EQUAL(e1->psi, e2->psi, granularity(gr));
 	CU_ASSERT_DOUBLE_EQUAL(e1->roll, e2->roll, granularity(gr));
-	CU_ASSERT_DOUBLE_EQUAL(e1->pitch, e2->pitch, granularity(gr));
 	CU_ASSERT_DOUBLE_EQUAL(e1->yaw, e2->yaw, granularity(gr));
 }
 

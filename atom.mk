@@ -146,20 +146,29 @@ include $(BUILD_LIBRARY)
 ifdef TARGET_TEST
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := tst-vmeta
+LOCAL_MODULE := tst-libvideo-metadata
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/src
 
 LOCAL_SRC_FILES := \
 	tests/vmeta_test.c \
 	tests/vmeta_test_compare.c \
+	tests/vmeta_test_csv.c \
+	tests/vmeta_test_json.c \
+	tests/vmeta_test_photo.c \
 	tests/vmeta_test_proto.c \
 	tests/vmeta_test_session.c \
 	tests/vmeta_test_utils.c \
-	tests/vmeta_test_v3.c
+	tests/vmeta_test_v1.c \
+	tests/vmeta_test_v2.c \
+	tests/vmeta_test_v3.c \
+	src/vmeta_csv.c \
+	src/vmeta_json.c
 
 LOCAL_LIBRARIES := \
+	json \
 	libcunit \
 	libfutils \
+	libphoto-metadata-defs \
 	libulog \
 	libvideo-metadata
 

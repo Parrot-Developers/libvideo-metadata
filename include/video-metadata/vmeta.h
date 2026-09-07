@@ -506,13 +506,22 @@ void vmeta_quat_to_euler(const struct vmeta_quaternion *quat,
 
 
 /**
- * Compute the Jenkins's one_at_a_time hash-value for a NULL-terminated string.
+ * Quaternion to Euler angles conversion (ZYX order).
+ * @param q: pointer to a quaternion structure
+ * @param euler: pointer to a Euler angles structure (output)
+ */
+VMETA_API void vmeta_quat_to_euler_zyx(const struct vmeta_quaternion *quat,
+				       struct vmeta_euler *euler);
+
+
+/**
+ * Compute the Jenkins's one_at_a_time hash-value for a NULL-terminated
+ * string.
  * @param str: string to hash
  * @param hash: pointer to the hash-value (output)
  * @return 0 on success, negative errno value in case of error
  */
-VMETA_API
-int vmeta_hash_joaat_str(const char *str, uint32_t *hash);
+VMETA_API int vmeta_hash_joaat_str(const char *str, uint32_t *hash);
 
 
 /**

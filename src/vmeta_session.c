@@ -27,7 +27,7 @@
 #include "vmeta_priv.h"
 
 
-#define COPY_VALUE(_dst, _src) snprintf(_dst, sizeof(_dst), "%s", _src);
+#define COPY_VALUE(_dst, _src) snprintf(_dst, sizeof(_dst), "%s", _src)
 
 
 #define MERGE_META_STR(_dst, _src, _field)                                     \
@@ -1281,10 +1281,11 @@ int vmeta_session_streaming_sdes_read(enum vmeta_stream_sdes_type type,
 			   0) {
 			meta->first_frame_capture_ts = strtoull(value, NULL, 0);
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_MEDIA_ID) == 0) {
-			meta->media_id = strtoul(value, NULL, 0);
+			meta->media_id = (uint32_t)strtoul(value, NULL, 0);
 		} else if (strcmp(prefix, VMETA_STRM_SDES_KEY_RESOURCE_INDEX) ==
 			   0) {
-			meta->resource_index = strtoul(value, NULL, 0);
+			meta->resource_index =
+				(uint32_t)strtoul(value, NULL, 0);
 		} else if (strcmp(prefix,
 				  VMETA_STRM_SDES_KEY_PRINCIPAL_POINT) == 0) {
 			ret = vmeta_session_principal_point_read(
@@ -1871,12 +1872,13 @@ int vmeta_session_streaming_sdp_read(enum vmeta_stream_sdp_type type,
 			       VMETA_STRM_SDP_KEY_FIRST_FRAME_SAMPLE_INDEX) ==
 			0) {
 			meta->first_frame_sample_index =
-				strtoul(value, NULL, 0);
+				(uint32_t)strtoul(value, NULL, 0);
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_MEDIA_ID) == 0) {
-			meta->media_id = strtoul(value, NULL, 0);
+			meta->media_id = (uint32_t)strtoul(value, NULL, 0);
 		} else if (strcmp(key, VMETA_STRM_SDP_KEY_RESOURCE_INDEX) ==
 			   0) {
-			meta->resource_index = strtoul(value, NULL, 0);
+			meta->resource_index =
+				(uint32_t)strtoul(value, NULL, 0);
 		}
 		/* fall through */
 	case VMETA_STRM_SDP_TYPE_MEDIA_ATTR:
@@ -2480,11 +2482,7 @@ static int vmeta_session_recording_json_comment_read(const char *value,
 						     struct vmeta_session *meta)
 {
 	int ret = 0;
-#if JSON_C_VERSION_NUM >= ((0 << 16) | (13 << 8) | 0)
-	const json_object *jobj;
-#else
 	json_object *jobj;
-#endif
 	json_object *jitem;
 	json_bool jret;
 
@@ -2544,7 +2542,8 @@ static int vmeta_session_recording_json_comment_read(const char *value,
 		jret = json_object_object_get_ex(
 			jobj, VMETA_REC_UDTA_JSON_KEY_PICTURE_HORZ_FOV, &jitem);
 		if (jret && (jitem != NULL)) {
-			meta->picture_fov.horz = json_object_get_double(jitem);
+			meta->picture_fov.horz =
+				(float)json_object_get_double(jitem);
 			meta->picture_fov.has_horz = 1;
 		}
 	}
@@ -2554,12 +2553,14 @@ static int vmeta_session_recording_json_comment_read(const char *value,
 		jret = json_object_object_get_ex(
 			jobj, VMETA_REC_UDTA_JSON_KEY_PICTURE_VERT_FOV, &jitem);
 		if (jret && (jitem != NULL)) {
-			meta->picture_fov.vert = json_object_get_double(jitem);
+			meta->picture_fov.vert =
+				(float)json_object_get_double(jitem);
 			meta->picture_fov.has_vert = 1;
 		}
 	}
 
 out:
+	json_object_put(jobj);
 	return ret;
 }
 
@@ -2808,11 +2809,12 @@ int vmeta_session_recording_read(const char *key,
 		meta->first_frame_capture_ts = strtoull(value, NULL, 0);
 	} else if (strcmp(key, VMETA_REC_META_KEY_FIRST_FRAME_SAMPLE_INDEX) ==
 		   0) {
-		meta->first_frame_sample_index = strtoul(value, NULL, 0);
+		meta->first_frame_sample_index =
+			(uint32_t)strtoul(value, NULL, 0);
 	} else if (strcmp(key, VMETA_REC_META_KEY_MEDIA_ID) == 0) {
-		meta->media_id = strtoul(value, NULL, 0);
+		meta->media_id = (uint32_t)strtoul(value, NULL, 0);
 	} else if (strcmp(key, VMETA_REC_META_KEY_RESOURCE_INDEX) == 0) {
-		meta->resource_index = strtoul(value, NULL, 0);
+		meta->resource_index = (uint32_t)strtoul(value, NULL, 0);
 	} else if (strcmp(key, VMETA_REC_META_KEY_PRINCIPAL_POINT) == 0) {
 		ret = vmeta_session_principal_point_read(
 			value, &meta->principal_point);

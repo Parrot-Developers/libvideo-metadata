@@ -44,6 +44,7 @@
 #define VMETA_ASSERT_BOTH_NULL_NOTNULL(p1, p2)                                 \
 	CU_ASSERT((p1 == NULL && p2 == NULL) || (p1 && p2))
 
+/* codecheck_ignore[SINGLE_STATEMENT_DO_WHILE_MACRO] */
 #define VMETA_ASSERT_BOTH_NULL_NOTNULL_OR_RETURN(p1, p2)                       \
 	do {                                                                   \
 		VMETA_ASSERT_BOTH_NULL_NOTNULL(p1, p2)                         \
@@ -61,6 +62,12 @@ extern CU_TestInfo s_session_tests[];
 extern CU_TestInfo s_v3_tests[];
 extern CU_TestInfo s_v3_monkey[];
 extern CU_TestInfo s_v3_gen[];
+extern CU_TestInfo s_csv_tests[];
+extern CU_TestInfo s_proto_conv_tests[];
+extern CU_TestInfo s_json_tests[];
+extern CU_TestInfo s_photo_tests[];
+extern CU_TestInfo s_v1_tests[];
+extern CU_TestInfo s_v2_tests[];
 
 /**
  * Since the v1, v2 and v3 format stores floats and doubles as fixed point

@@ -652,6 +652,26 @@ vmeta_frame_proto_get_drone_location(Vmeta__DroneMetadata *drone)
 }
 
 
+Google__Protobuf__FloatValue *
+vmeta_frame_proto_get_drone_battery_voltage(Vmeta__DroneMetadata *drone)
+{
+	Google__Protobuf__FloatValue *battery_voltage;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!drone, EINVAL, NULL);
+
+	if (drone->battery_voltage)
+		return drone->battery_voltage;
+	battery_voltage = calloc(1, sizeof(*battery_voltage));
+	if (!battery_voltage) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	google__protobuf__float_value__init(battery_voltage);
+	drone->battery_voltage = battery_voltage;
+	return battery_voltage;
+}
+
+
 Vmeta__Quaternion *vmeta_frame_proto_get_drone_quat(Vmeta__DroneMetadata *drone)
 {
 	Vmeta__Quaternion *quat;
@@ -1211,6 +1231,27 @@ Vmeta__Location *vmeta_frame_proto_get_lfic_location(Vmeta__LFICMetadata *lfic)
 	lfic->location = location;
 	return location;
 }
+
+
+Vmeta__CameraModel *
+vmeta_frame_proto_get_camera_model(Vmeta__PhotoMetadata *photo_meta)
+{
+	Vmeta__CameraModel *camera_model;
+
+	ULOG_ERRNO_RETURN_VAL_IF(!photo_meta, EINVAL, NULL);
+
+	if (photo_meta->camera_model)
+		return photo_meta->camera_model;
+	camera_model = calloc(1, sizeof(*camera_model));
+	if (!camera_model) {
+		ULOG_ERRNO("calloc", ENOMEM);
+		return NULL;
+	}
+	vmeta__camera_model__init(camera_model);
+	photo_meta->camera_model = camera_model;
+	return camera_model;
+}
+
 
 Vmeta__PhotoMetadata *vmeta_frame_proto_get_photo(Vmeta__TimedMetadata *meta)
 {

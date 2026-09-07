@@ -561,7 +561,7 @@ VMETA_API int vmeta_frame_unref(struct vmeta_frame *meta);
  * @return the current reference count of the metadata on success
  *         (0 or greater), negative errno value in case of error
  */
-VMETA_API int vmeta_frame_get_ref_count(struct vmeta_frame *meta);
+VMETA_API int vmeta_frame_get_ref_count(const struct vmeta_frame *meta);
 
 
 /**

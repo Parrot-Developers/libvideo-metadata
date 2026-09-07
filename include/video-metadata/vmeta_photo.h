@@ -38,38 +38,23 @@ typedef void (*vmeta_photo_write_cb_t)(
 
 
 /**
- * Write session metadata as Exif or XMP items.
- * The function is called for a whole session metadata structure and calls the
- * cb callback function for each Exif or XMP item that should be written.
+ * Write session and frame metadata as Exif or XMP items.
+ * The function is called for a session and/or frame metadata structure
+ * and calls the cb callback function for each Exif or XMP item that
+ * should be written.
  * For each call to the cb function, the item type, key, tag ID and value are
  * given. Both key and value are null-terminated.
- * @param meta: pointer to the session metadata structure
+ * @param session: pointer to the session metadata structure (optional)
+ * @param frame: pointer to the frame metadata structure (optional)
  * @param cb: 'Exif' or 'XMP' item writing callback function
  * @param userdata: 'Exif' or 'XMP' item writing callback function user data
  * @return 0 on success, negative errno value in case of error
  */
 VMETA_API
-int vmeta_session_photo_write(const struct vmeta_session *meta,
-			      vmeta_photo_write_cb_t cb,
-			      void *userdata);
-
-
-/**
- * Write frame metadata as Exif or XMP items.
- * The function is called for a frame metadata structure and calls the
- * cb callback function for each Exif or XMP item that should be written.
- * For each call to the cb function, the item type, key, tag ID and value are
- * given. Both key and value are null-terminated.
- * @param meta: pointer to the frame metadata structure
- * @param cb: 'Exif' or 'XMP' item writing callback function
- * @param userdata: 'Exif' or 'XMP' item writing callback function user data
- * @return 0 on success, negative errno value in case of error
- */
-VMETA_API
-int vmeta_frame_photo_write(const struct vmeta_frame *meta,
-			    vmeta_photo_write_cb_t cb,
-			    void *userdata);
-
+int vmeta_photo_write(const struct vmeta_session *session,
+		      struct vmeta_frame *frame,
+		      vmeta_photo_write_cb_t cb,
+		      void *userdata);
 
 #ifdef __cplusplus
 }

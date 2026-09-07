@@ -1412,6 +1412,7 @@ int vmeta_session_thermal_scale_factor_read(const char *str, double *value);
  * @return the length of the string written on success,
  *         negative errno value in case of error
  */
+VMETA_API
 ssize_t vmeta_session_principal_point_write(
 	char *str,
 	size_t len,
@@ -1424,6 +1425,7 @@ ssize_t vmeta_session_principal_point_write(
  * @param principal_point: pointer to the principal_point (output)
  * @return 0 on success, negative errno value in case of error
  */
+VMETA_API
 int vmeta_session_principal_point_read(
 	const char *str,
 	struct vmeta_principal_point *principal_point);

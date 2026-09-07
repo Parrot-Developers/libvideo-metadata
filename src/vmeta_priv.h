@@ -417,7 +417,7 @@ const char *vmeta_link_status_to_str(Vmeta__LinkStatus val);
 /**
  * Internal conversion API
  */
-int vmeta_frame_convert(struct vmeta_frame *in_frame,
+int vmeta_frame_convert(const struct vmeta_frame *in_frame,
 			struct vmeta_frame **out_frame,
 			enum vmeta_frame_type out_type);
 

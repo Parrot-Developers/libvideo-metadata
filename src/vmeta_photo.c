@@ -27,7 +27,9 @@
 #include "vmeta_priv.h"
 #include <video-metadata/vmeta_photo.h>
 
+#include <limits.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +38,48 @@
 /* Shorthand macros for metadata indices */
 #define EXIF_(_name) PMETA_DEFS_EXIF_IDX_##_name
 #define XMP_(_name) PMETA_DEFS_XMP_IDX_##_name
+
+
+struct vmeta_photo_write_ctx {
+	const struct vmeta_session *session;
+	struct vmeta_frame *frame;
+	vmeta_photo_write_cb_t cb;
+	void *userdata;
+};
+
+
+static enum vmeta_camera_model_type
+get_resolved_camera_model_type(const struct vmeta_photo_write_ctx *ctx)
+{
+	int res;
+	const Vmeta__TimedMetadata *tm = NULL;
+	enum vmeta_camera_model_type type = VMETA_CAMERA_MODEL_TYPE_UNKNOWN;
+
+	if (!ctx->frame || ctx->frame->type != VMETA_FRAME_TYPE_PROTO)
+		goto fallback;
+
+	res = vmeta_frame_proto_get_unpacked(ctx->frame, &tm);
+	if (res != 0 || tm == NULL)
+		goto fallback;
+
+	if (tm->photo && tm->photo->camera_model) {
+		const Vmeta__CameraModel *model = tm->photo->camera_model;
+		if (model->id_case == VMETA__CAMERA_MODEL__ID_PERSPECTIVE)
+			type = VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE;
+		else if (model->id_case == VMETA__CAMERA_MODEL__ID_FISHEYE)
+			type = VMETA_CAMERA_MODEL_TYPE_FISHEYE;
+	}
+	vmeta_frame_proto_release_unpacked(ctx->frame, tm);
+
+	if (type != VMETA_CAMERA_MODEL_TYPE_UNKNOWN)
+		return type;
+
+fallback:
+	if (ctx->session)
+		return ctx->session->camera_model.type;
+
+	return VMETA_CAMERA_MODEL_TYPE_UNKNOWN;
+}
 
 
 static inline void write_exif(vmeta_photo_write_cb_t cb,
@@ -70,7 +114,10 @@ static inline void write_xmp(vmeta_photo_write_cb_t cb,
 }
 
 
-static int format_exif_date(uint64_t utc_ts, char *out_date, size_t max_len)
+static int format_exif_date(uint64_t utc_ts,
+			    int32_t date_gmtoff,
+			    char *out_date,
+			    size_t max_len)
 {
 	int res;
 	/* EXIF date format is fixed at 19 characters: "YYYY:MM:DD HH:MM:SS" */
@@ -81,8 +128,11 @@ static int format_exif_date(uint64_t utc_ts, char *out_date, size_t max_len)
 
 	/* Get local time in ISO 8601 long format: "YYYY-MM-DDTHH:MM:SS+HH:MM"
 	 */
-	res = time_local_format(
-		utc_ts / 1000000, 0, TIME_FMT_LONG, out_date, max_len);
+	res = time_local_format(utc_ts / 1000000,
+				date_gmtoff,
+				TIME_FMT_LONG,
+				out_date,
+				max_len);
 	if (res < 0)
 		return res;
 
@@ -137,12 +187,6 @@ static void write_session_versions(const struct vmeta_session *meta,
 				   void *userdata)
 {
 	if (meta->software_version[0] != '\0') {
-		write_exif(
-			cb, EXIF_(SOFTWARE), meta->software_version, userdata);
-		write_xmp(cb,
-			  XMP_(TIFF_SOFTWARE),
-			  meta->software_version,
-			  userdata);
 		write_xmp(cb,
 			  XMP_(SOFTWARE_VERSION),
 			  meta->software_version,
@@ -161,9 +205,65 @@ static void write_session_versions(const struct vmeta_session *meta,
 	if (meta->model_id[0] != '\0')
 		write_xmp(cb, XMP_(MODEL_ID), meta->model_id, userdata);
 
-	if (meta->build_id[0] != '\0')
+	if (meta->build_id[0] != '\0') {
+		write_exif(cb, EXIF_(SOFTWARE), meta->build_id, userdata);
+		write_xmp(cb, XMP_(TIFF_SOFTWARE), meta->build_id, userdata);
 		write_xmp(
 			cb, XMP_(SOFTWARE_BUILD_ID), meta->build_id, userdata);
+	}
+}
+
+
+static void write_dates_internal(uint64_t date_ts_us,
+				 int32_t date_gmtoff,
+				 vmeta_photo_write_cb_t cb,
+				 void *userdata)
+{
+	int ret;
+	char date[VMETA_SESSION_DATE_MAX_LEN];
+	char tz[10];
+
+	format_exif_date(date_ts_us, date_gmtoff, date, sizeof(date));
+	write_exif(cb, EXIF_(DATETIME), date, userdata);
+	write_exif(cb, EXIF_(DATETIME_ORIGINAL), date, userdata);
+	write_exif(cb, EXIF_(DATETIME_DIGITIZED), date, userdata);
+
+	/* Exif Offset Time (+/-HH:MM) */
+	int h = abs(date_gmtoff) / 3600;
+	int m = (abs(date_gmtoff) % 3600) / 60;
+	snprintf(tz,
+		 sizeof(tz),
+		 "%s%02d:%02d",
+		 (date_gmtoff >= 0) ? "+" : "-",
+		 h,
+		 m);
+
+	write_exif(cb, EXIF_(OFFSET_TIME), tz, userdata);
+	write_exif(cb, EXIF_(OFFSET_TIME_ORIGINAL), tz, userdata);
+	write_exif(cb, EXIF_(OFFSET_TIME_DIGITIZED), tz, userdata);
+
+	/* XMP Dates (ISO 8601) */
+	ret = time_local_format(date_ts_us / 1000000,
+				date_gmtoff,
+				TIME_FMT_ISO8601_LONG,
+				date,
+				sizeof(date));
+	if (ret >= 0) {
+		write_xmp(cb, XMP_(DATETIME_ORIGINAL), date, userdata);
+		write_xmp(cb, XMP_(CREATE_DATE), date, userdata);
+		write_xmp(cb, XMP_(MODIFY_DATE), date, userdata);
+		write_xmp(cb, XMP_(DC_DATE), date, userdata);
+	}
+
+	char subsec[4];
+	snprintf(subsec,
+		 sizeof(subsec),
+		 "%03" PRIu64,
+		 (date_ts_us / 1000) % 1000);
+
+	write_exif(cb, EXIF_(SUBSEC_TIME), subsec, userdata);
+	write_exif(cb, EXIF_(SUBSEC_TIME_ORIGINAL), subsec, userdata);
+	write_exif(cb, EXIF_(SUBSEC_TIME_DIGITIZED), subsec, userdata);
 }
 
 
@@ -193,61 +293,13 @@ static void write_session_dates(const struct vmeta_session *meta,
 	}
 
 	/* Standard Date/Time tags */
-	uint64_t date_ts = 0;
+	uint64_t date_ts_us = 0;
 	int32_t date_gmtoff = 0;
 
 	if (meta->media_date != 0) {
-		date_ts = meta->media_date;
+		date_ts_us = meta->media_date * 1000000ULL;
 		date_gmtoff = meta->media_date_gmtoff;
-	} else if (meta->flight_date != 0) {
-		date_ts = meta->flight_date;
-		date_gmtoff = meta->flight_date_gmtoff;
-	}
-
-	if (date_ts != 0) {
-		char date[VMETA_SESSION_DATE_MAX_LEN];
-		char tz[10];
-		int ret;
-
-		/* Exif Date/Time (YYYY:MM:DD HH:MM:SS) */
-		ret = time_local_format(date_ts,
-					date_gmtoff,
-					TIME_FMT_LONG,
-					date,
-					sizeof(date));
-		if (ret >= 0) {
-			if (strlen(date) >= 10) {
-				date[4] = ':';
-				date[7] = ':';
-			}
-			write_exif(cb, EXIF_(DATETIME), date, userdata);
-			write_exif(
-				cb, EXIF_(DATETIME_ORIGINAL), date, userdata);
-		}
-
-		/* Exif Offset Time (+/-HH:MM) */
-		int h = abs(date_gmtoff) / 3600;
-		int m = (abs(date_gmtoff) % 3600) / 60;
-		snprintf(tz,
-			 sizeof(tz),
-			 "%s%02d:%02d",
-			 (date_gmtoff >= 0) ? "+" : "-",
-			 h,
-			 m);
-
-		write_exif(cb, EXIF_(OFFSET_TIME), tz, userdata);
-		write_exif(cb, EXIF_(OFFSET_TIME_ORIGINAL), tz, userdata);
-
-		/* XMP Dates (ISO 8601) */
-		ret = time_local_format(date_ts,
-					date_gmtoff,
-					TIME_FMT_ISO8601_LONG,
-					date,
-					sizeof(date));
-		if (ret >= 0) {
-			write_xmp(cb, XMP_(CREATE_DATE), date, userdata);
-			write_xmp(cb, XMP_(MODIFY_DATE), date, userdata);
-		}
+		write_dates_internal(date_ts_us, date_gmtoff, cb, userdata);
 	}
 }
 
@@ -396,155 +448,346 @@ static void write_session_camera_model(const struct vmeta_session *meta,
 }
 
 
-int vmeta_session_photo_write(const struct vmeta_session *meta,
-			      vmeta_photo_write_cb_t cb,
-			      void *userdata)
+static void write_frame_camera_model(const Vmeta__PhotoMetadata *photo_meta,
+				     vmeta_photo_write_cb_t cb,
+				     void *userdata)
 {
-	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
-	ULOG_ERRNO_RETURN_ERR_IF(cb == NULL, EINVAL);
+	if (!photo_meta || !photo_meta->camera_model)
+		return;
 
-	if (meta->title[0] != '\0')
-		write_exif(cb, EXIF_(IMAGE_DESCRIPTION), meta->title, userdata);
+	const Vmeta__CameraModel *model = photo_meta->camera_model;
 
-	write_session_maker_model(meta, cb, userdata);
-	write_session_versions(meta, cb, userdata);
-	write_session_ids_and_misc(meta, cb, userdata);
-	write_session_dates(meta, cb, userdata);
-	write_session_camera_model(meta, cb, userdata);
+	/* Clear previous model specific tags */
+	write_xmp(cb, XMP_(PERSPECTIVE_DISTORTION), NULL, userdata);
+	write_xmp(cb, XMP_(FISHEYE_AFFINE_MATRIX), NULL, userdata);
+	write_xmp(cb, XMP_(FISHEYE_AFFINE_SYMMETRIC), NULL, userdata);
+	write_xmp(cb, XMP_(FISHEYE_POLYNOMIAL), NULL, userdata);
 
-	return 0;
+	if (model->id_case == VMETA__CAMERA_MODEL__ID_PERSPECTIVE &&
+	    model->perspective) {
+		char dist[VMETA_SESSION_PERSPECTIVE_DISTORTION_MAX_LEN];
+		write_xmp(cb,
+			  XMP_(CAMERA_MODEL_TYPE),
+			  vmeta_camera_model_type_to_str(
+				  VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE),
+			  userdata);
+
+		if (model->perspective->distorsion) {
+			ssize_t ret =
+				vmeta_session_perspective_distortion_write(
+					dist,
+					sizeof(dist),
+					model->perspective->distorsion->r1,
+					model->perspective->distorsion->r2,
+					model->perspective->distorsion->r3,
+					model->perspective->distorsion->t1,
+					model->perspective->distorsion->t2);
+			if (ret > 0) {
+				write_xmp(cb,
+					  XMP_(PERSPECTIVE_DISTORTION),
+					  dist,
+					  userdata);
+			}
+		}
+	} else if (model->id_case == VMETA__CAMERA_MODEL__ID_FISHEYE &&
+		   model->fisheye) {
+		char matrix[VMETA_SESSION_FISHEYE_AFFINE_MATRIX_MAX_LEN];
+		char coef[VMETA_SESSION_FISHEYE_POLYNOMIAL_MAX_LEN];
+		write_xmp(cb,
+			  XMP_(CAMERA_MODEL_TYPE),
+			  vmeta_camera_model_type_to_str(
+				  VMETA_CAMERA_MODEL_TYPE_FISHEYE),
+			  userdata);
+
+		if (model->fisheye->affine_matrix) {
+			ssize_t ret = vmeta_session_fisheye_affine_matrix_write(
+				matrix,
+				sizeof(matrix),
+				model->fisheye->affine_matrix->c,
+				model->fisheye->affine_matrix->d,
+				model->fisheye->affine_matrix->e,
+				model->fisheye->affine_matrix->f);
+			if (ret > 0) {
+				write_xmp(cb,
+					  XMP_(FISHEYE_AFFINE_MATRIX),
+					  matrix,
+					  userdata);
+
+				if (model->fisheye->affine_matrix->symmetric) {
+					char val[11];
+					snprintf(val,
+						 sizeof(val),
+						 "%u",
+						 model->fisheye->affine_matrix
+							 ->symmetric->value);
+					write_xmp(
+						cb,
+						XMP_(FISHEYE_AFFINE_SYMMETRIC),
+						val,
+						userdata);
+				}
+			}
+		}
+
+		if (model->fisheye->polynomial) {
+			ssize_t ret = vmeta_session_fisheye_polynomial_write(
+				coef,
+				sizeof(coef),
+				model->fisheye->polynomial->p2,
+				model->fisheye->polynomial->p3,
+				model->fisheye->polynomial->p4);
+			if (ret > 0)
+				write_xmp(cb,
+					  XMP_(FISHEYE_POLYNOMIAL),
+					  coef,
+					  userdata);
+		}
+	}
 }
 
 
-static void write_frame_timestamps(const struct vmeta_frame *meta,
+static void write_frame_timestamps(struct vmeta_frame *meta,
 				   vmeta_photo_write_cb_t cb,
 				   void *userdata)
 {
 	uint64_t ts = 0;
-	if (vmeta_frame_get_frame_timestamp((struct vmeta_frame *)meta, &ts) ==
-	    0) {
+	if (vmeta_frame_get_frame_timestamp(meta, &ts) == 0) {
 		char val[21];
 		snprintf(val, sizeof(val), "%" PRIu64, ts);
 		write_xmp(cb, XMP_(CAPTURE_TS_US), val, userdata);
 	}
-
-	uint64_t utc_ts = 0;
-	if (vmeta_frame_get_frame_utc_timestamp((struct vmeta_frame *)meta,
-						&utc_ts) == 0 &&
-	    utc_ts != 0) {
-		/* Format: YYYY:MM:DD HH:MM:SS for Exif */
-		char date[VMETA_SESSION_DATE_MAX_LEN];
-		format_exif_date(utc_ts, date, sizeof(date));
-
-		write_exif(cb, EXIF_(DATETIME_ORIGINAL), date, userdata);
-		write_exif(cb, EXIF_(DATETIME), date, userdata);
-		write_exif(cb, EXIF_(DATETIME_DIGITIZED), date, userdata);
-
-		/* Timezone offsets (assuming UTC) */
-		const char *tz = "+00:00";
-		write_exif(cb, EXIF_(OFFSET_TIME), tz, userdata);
-		write_exif(cb, EXIF_(OFFSET_TIME_ORIGINAL), tz, userdata);
-		write_exif(cb, EXIF_(OFFSET_TIME_DIGITIZED), tz, userdata);
-
-		/* Format: ISO 8601 for XMP */
-		char iso_date[30];
-		time_local_format(utc_ts / 1000000,
-				  0,
-				  TIME_FMT_ISO8601_LONG,
-				  iso_date,
-				  sizeof(iso_date));
-
-		write_xmp(cb, XMP_(CREATE_DATE), iso_date, userdata);
-		write_xmp(cb, XMP_(MODIFY_DATE), iso_date, userdata);
-		write_xmp(cb, XMP_(DC_DATE), iso_date, userdata);
-
-		/* SubSecTime (milliseconds) */
-		char subsec[4];
-		snprintf(subsec,
-			 sizeof(subsec),
-			 "%03" PRIu64,
-			 (utc_ts / 1000) % 1000);
-
-		write_exif(cb, EXIF_(SUBSEC_TIME), subsec, userdata);
-		write_exif(cb, EXIF_(SUBSEC_TIME_ORIGINAL), subsec, userdata);
-		write_exif(cb, EXIF_(SUBSEC_TIME_DIGITIZED), subsec, userdata);
-	}
 }
 
 
-static void write_frame_location(const struct vmeta_frame *meta,
+#define FRAC_MAX_TERMS 30
+#define FRAC_MIN_DIVISOR 1e-10
+#define FRAC_MAX_ERROR 1e-8
+
+
+static int get_gcd(int a, int b)
+{
+	while (b != 0) {
+		int temp = b;
+		b = a % b;
+		a = temp;
+	}
+	return a;
+}
+
+
+static void double_to_fraction(double src, int *dest_n, int *dest_d)
+{
+	double V;
+	double F;
+	int N = 1;
+	int D = 1;
+	int A;
+	int64_t N1 = 1;
+	int64_t D1 = 0;
+	int64_t N2 = 0;
+	int64_t D2 = 1;
+	int gcd_val;
+	int negative = 0;
+
+	F = src;
+	if (F < 0.0) {
+		F = -F;
+		negative = 1;
+	}
+	V = F;
+
+	for (int i = 0; i < FRAC_MAX_TERMS; i++) {
+		A = (int)F;
+		F = F - A;
+
+		N2 = N1 * A + N2;
+		D2 = D1 * A + D2;
+
+		/* Overflow protection */
+		if (N2 > INT_MAX || D2 > INT_MAX)
+			break;
+
+		N = (int)N2;
+		D = (int)D2;
+
+		N2 = N1;
+		D2 = D1;
+		N1 = N;
+		D1 = D;
+
+		if (F < FRAC_MIN_DIVISOR ||
+		    fabs(V - ((double)N) / D) < FRAC_MAX_ERROR) {
+			break;
+		}
+		F = 1.0 / F;
+	}
+
+	if (D == 0) {
+		N = INT_MAX;
+		D = 1;
+	}
+
+	if (negative)
+		N = -N;
+
+	gcd_val = get_gcd(abs(N), abs(D));
+	if (gcd_val > 0) {
+		N /= gcd_val;
+		D /= gcd_val;
+	}
+
+	*dest_n = N;
+	*dest_d = D;
+}
+
+
+static void format_xmp_gps_coordinate(char *buf,
+				      size_t buf_size,
+				      double value,
+				      char pos_ref,
+				      char neg_ref)
+{
+	char direction;
+
+	if (value < 0) {
+		direction = neg_ref;
+		value = fabs(value);
+	} else {
+		direction = pos_ref;
+	}
+
+	int degrees = (int)value;
+	double minutes = (value - degrees) * 60.0;
+
+	snprintf(buf, buf_size, "%d,%.8f%c", degrees, minutes, direction);
+}
+
+
+static inline void
+format_xmp_gps_latitude(char *buf, size_t buf_size, double lat)
+{
+	format_xmp_gps_coordinate(buf, buf_size, lat, 'N', 'S');
+}
+
+
+static inline void
+format_xmp_gps_longitude(char *buf, size_t buf_size, double lon)
+{
+	format_xmp_gps_coordinate(buf, buf_size, lon, 'E', 'W');
+}
+
+
+static inline void
+format_fraction_string(char *buf, size_t buf_size, double value)
+{
+	int num;
+	int den;
+	double_to_fraction(value, &num, &den);
+	snprintf(buf, buf_size, "%d/%d", num, den);
+}
+
+
+static inline void
+format_exif_gps_coordinate_dms(char *buf, size_t buf_size, double value)
+{
+	value = fabs(value);
+	int degrees = (int)value;
+	double minutes_full = (value - degrees) * 60.0;
+	int minutes = (int)minutes_full;
+	double seconds = (minutes_full - minutes) * 60.0;
+
+	const long sec_den = 100000;
+	long sec_num = (long)(seconds * (double)sec_den + 0.5);
+
+	snprintf(buf,
+		 buf_size,
+		 "%d/1,%d/1,%ld/%ld",
+		 degrees,
+		 minutes,
+		 sec_num,
+		 sec_den);
+}
+
+
+static void write_frame_location(struct vmeta_frame *meta,
 				 vmeta_photo_write_cb_t cb,
 				 void *userdata)
 {
+	/* Camera location */
 	struct vmeta_location loc;
-	if (vmeta_frame_get_location((struct vmeta_frame *)meta, &loc) == 0 &&
-	    loc.valid) {
-		char val[32];
+	if (vmeta_frame_get_camera_location(meta, &loc) == 0 && loc.valid) {
+		char val[64];
 
 		/* Latitude */
-		snprintf(val, sizeof(val), "%.8f", fabs(loc.latitude));
+		format_exif_gps_coordinate_dms(val, sizeof(val), loc.latitude);
 		write_exif(cb, EXIF_(GPS_LATITUDE), val, userdata);
 		write_exif(cb,
 			   EXIF_(GPS_LATITUDE_REF),
 			   loc.latitude >= 0 ? "N" : "S",
 			   userdata);
 
-		snprintf(val, sizeof(val), "%.8f", loc.latitude);
-		write_xmp(cb, XMP_(DRONE_LATITUDE), val, userdata);
+		format_xmp_gps_latitude(val, sizeof(val), loc.latitude);
+		write_xmp(cb, XMP_(GPS_LATITUDE), val, userdata);
 
 		/* Longitude */
-		snprintf(val, sizeof(val), "%.8f", fabs(loc.longitude));
+		format_exif_gps_coordinate_dms(val, sizeof(val), loc.longitude);
 		write_exif(cb, EXIF_(GPS_LONGITUDE), val, userdata);
 		write_exif(cb,
 			   EXIF_(GPS_LONGITUDE_REF),
 			   loc.longitude >= 0 ? "E" : "W",
 			   userdata);
 
-		snprintf(val, sizeof(val), "%.8f", loc.longitude);
-		write_xmp(cb, XMP_(DRONE_LONGITUDE), val, userdata);
+		format_xmp_gps_longitude(val, sizeof(val), loc.longitude);
+		write_xmp(cb, XMP_(GPS_LONGITUDE), val, userdata);
 
-		/* Altitude */
+		/* Altitude above takeoff */
+		double altitude_ato = 0;
+		if (vmeta_frame_get_altitude_above_takeoff(
+			    meta, &altitude_ato) == 0) {
+			format_fraction_string(val, sizeof(val), altitude_ato);
+			write_xmp(cb,
+				  XMP_(CAMERA_ABOVE_GROUND_ALTITUDE),
+				  val,
+				  userdata);
+		}
+
+		/* Altitude (EGM96 AMSL) */
 		if (!isnan(loc.altitude_egm96amsl)) {
 			snprintf(val,
 				 sizeof(val),
-				 "%.2f",
+				 "%.4f",
 				 fabs(loc.altitude_egm96amsl));
-			write_exif(cb, EXIF_(GPS_ALTITUDE), val, userdata);
-			write_exif(cb,
-				   EXIF_(GPS_ALTITUDE_REF),
-				   loc.altitude_egm96amsl >= 0 ? "0" : "1",
-				   userdata);
-
-			snprintf(val,
-				 sizeof(val),
-				 "%.2f",
-				 loc.altitude_egm96amsl);
-			write_xmp(cb, XMP_(DRONE_ALTITUDE), val, userdata);
+			write_xmp(cb, XMP_(ALTITUDE_AMSL), val, userdata);
 		}
 
+		/* Altitude (WGS84 Ellipsoid) */
 		if (!isnan(loc.altitude_wgs84ellipsoid)) {
-			snprintf(val,
-				 sizeof(val),
-				 "%.2f",
-				 loc.altitude_wgs84ellipsoid);
-			write_xmp(
-				cb, XMP_(DRONE_ALTITUDE_WGS84), val, userdata);
+			format_fraction_string(
+				val,
+				sizeof(val),
+				fabs(loc.altitude_wgs84ellipsoid));
+			write_exif(cb, EXIF_(GPS_ALTITUDE), val, userdata);
+			write_xmp(cb, XMP_(GPS_ALTITUDE), val, userdata);
+			write_exif(cb,
+				   EXIF_(GPS_ALTITUDE_REF),
+				   loc.altitude_wgs84ellipsoid >= 0 ? "0" : "1",
+				   userdata);
+			write_xmp(cb,
+				  XMP_(GPS_ALTITUDE_REF),
+				  loc.altitude_wgs84ellipsoid >= 0 ? "0" : "1",
+				  userdata);
 		}
 
 		if (loc.horizontal_accuracy != 0.) {
-			snprintf(val,
-				 sizeof(val),
-				 "%.2f",
-				 loc.horizontal_accuracy);
+			format_fraction_string(
+				val, sizeof(val), loc.horizontal_accuracy);
 			write_xmp(
 				cb, XMP_(PIX4D_GPS_XY_ACCURACY), val, userdata);
 		}
 
 		if (loc.vertical_accuracy != 0.) {
-			snprintf(val,
-				 sizeof(val),
-				 "%.2f",
-				 loc.vertical_accuracy);
+			format_fraction_string(
+				val, sizeof(val), loc.vertical_accuracy);
 			write_xmp(
 				cb, XMP_(PIX4D_GPS_Z_ACCURACY), val, userdata);
 		}
@@ -553,96 +796,181 @@ static void write_frame_location(const struct vmeta_frame *meta,
 			snprintf(val, sizeof(val), "%u", loc.sv_count);
 			write_exif(cb, EXIF_(GPS_SATELLITES), val, userdata);
 		}
+
+		/* Constants */
+		write_exif(cb, EXIF_(GPS_VERSION_ID), "2300", userdata);
+		write_exif(cb, EXIF_(GPS_MAP_DATUM), "WGS-84", userdata);
+		write_xmp(cb, XMP_(CAMERA_HORIZ_CS), "EPSG:4326", userdata);
+		write_xmp(cb, XMP_(CAMERA_VERT_CS), "ellipsoidal", userdata);
+	}
+
+	/* Drone location */
+	if (vmeta_frame_get_location(meta, &loc) == 0 && loc.valid) {
+		char val[32];
+
+		/* Latitude */
+		snprintf(val, sizeof(val), "%.8f", loc.latitude);
+		write_xmp(cb, XMP_(DRONE_LATITUDE), val, userdata);
+
+		/* Longitude */
+		snprintf(val, sizeof(val), "%.8f", loc.longitude);
+		write_xmp(cb, XMP_(DRONE_LONGITUDE), val, userdata);
+
+		/* Altitude (EGM96 AMSL) */
+		if (!isnan(loc.altitude_egm96amsl)) {
+			snprintf(val,
+				 sizeof(val),
+				 "%.4f",
+				 loc.altitude_egm96amsl);
+			write_xmp(cb, XMP_(DRONE_ALTITUDE_AMSL), val, userdata);
+		}
+
+		/* Altitude (WGS84 Ellipsoid) */
+		if (!isnan(loc.altitude_wgs84ellipsoid)) {
+			snprintf(val,
+				 sizeof(val),
+				 "%.4f",
+				 loc.altitude_wgs84ellipsoid);
+			write_xmp(cb,
+				  XMP_(DRONE_ALTITUDE_ELLIPSOID),
+				  val,
+				  userdata);
+		}
 	}
 }
 
 
-static void write_frame_orientation(const struct vmeta_frame *meta,
+static int quaternion_mul(struct vmeta_quaternion *q_res,
+			  const struct vmeta_quaternion *q1,
+			  const struct vmeta_quaternion *q2)
+{
+	struct vmeta_quaternion tq; /* in case res aliases q1 or q2 */
+
+	if (!q_res || !q1 || !q2)
+		return -1;
+
+	tq.x = q1->x * q2->w + q1->y * q2->z - q1->z * q2->y + q1->w * q2->x;
+	tq.y = -q1->x * q2->z + q1->y * q2->w + q1->z * q2->x + q1->w * q2->y;
+	tq.z = q1->x * q2->y - q1->y * q2->x + q1->z * q2->w + q1->w * q2->z;
+	tq.w = -q1->x * q2->x - q1->y * q2->y - q1->z * q2->z + q1->w * q2->w;
+
+	*q_res = tq;
+
+	return 0;
+}
+
+
+static void write_frame_pix4d_orientation(struct vmeta_frame *meta,
+					  vmeta_photo_write_cb_t cb,
+					  void *userdata)
+{
+	char val[16];
+	struct vmeta_euler euler;
+	const struct vmeta_quaternion q_90y = {
+		0.70710678f, 0.f, 0.70710678f, 0.f};
+	struct vmeta_quaternion quat;
+	struct vmeta_quaternion pix4d_quat;
+
+	if (vmeta_frame_get_frame_quat(meta, &quat) != 0)
+		return;
+
+	quaternion_mul(&pix4d_quat, &quat, &q_90y);
+
+	vmeta_quat_to_euler_zyx(&pix4d_quat, &euler);
+
+	/* Convert radians to degrees */
+	snprintf(val, sizeof(val), "%.6f", euler.yaw * 180.0 / M_PI);
+	write_xmp(cb, XMP_(PIX4D_CAMERA_YAW), val, userdata);
+
+	snprintf(val, sizeof(val), "%.6f", euler.roll * 180.0 / M_PI);
+	write_xmp(cb, XMP_(PIX4D_CAMERA_ROLL), val, userdata);
+
+	snprintf(val, sizeof(val), "%.6f", euler.pitch * 180.0 / M_PI);
+	write_xmp(cb, XMP_(PIX4D_CAMERA_PITCH), val, userdata);
+}
+
+
+static void write_frame_orientation(struct vmeta_frame *meta,
 				    vmeta_photo_write_cb_t cb,
 				    void *userdata)
 {
 	struct vmeta_euler euler;
-	if (vmeta_frame_get_frame_euler((struct vmeta_frame *)meta, &euler) ==
-	    0) {
+	if (vmeta_frame_get_frame_euler(meta, &euler) == 0) {
 		char val[16];
 		/* Convert radians to degrees */
 		snprintf(val, sizeof(val), "%.6f", euler.roll * 180.0 / M_PI);
 		write_xmp(cb, XMP_(CAMERA_ROLL), val, userdata);
-		write_xmp(cb, XMP_(PIX4D_CAMERA_ROLL), val, userdata);
 
 		snprintf(val, sizeof(val), "%.6f", euler.pitch * 180.0 / M_PI);
 		write_xmp(cb, XMP_(CAMERA_PITCH), val, userdata);
-		write_xmp(cb, XMP_(PIX4D_CAMERA_PITCH), val, userdata);
 
 		snprintf(val, sizeof(val), "%.6f", euler.yaw * 180.0 / M_PI);
 		write_xmp(cb, XMP_(CAMERA_YAW), val, userdata);
-		write_xmp(cb, XMP_(PIX4D_CAMERA_YAW), val, userdata);
 	}
 
-	struct vmeta_quaternion base_quat;
-	if (vmeta_frame_get_frame_base_quat((struct vmeta_frame *)meta,
-					    &base_quat) == 0) {
+	struct vmeta_quaternion quat;
+	if (vmeta_frame_get_frame_local_quat(meta, &quat) == 0) {
 		char val[64];
 		snprintf(val,
 			 sizeof(val),
-			 "%.5f,%.5f,%.5f,%.5f",
-			 base_quat.w,
-			 base_quat.x,
-			 base_quat.y,
-			 base_quat.z);
+			 "%.8f,%.8f,%.8f,%.8f",
+			 quat.w,
+			 quat.x,
+			 quat.y,
+			 quat.z);
 		write_xmp(cb, XMP_(DRONE_CAMERA_NED_START_QUAT), val, userdata);
 	}
+
+	write_frame_pix4d_orientation(meta, cb, userdata);
 }
 
 
-static void write_frame_exposure(const struct vmeta_frame *meta,
+static void write_frame_exposure(struct vmeta_frame *meta,
 				 vmeta_photo_write_cb_t cb,
 				 void *userdata)
 {
 	float exposure_time = 0;
-	if (vmeta_frame_get_exposure_time((struct vmeta_frame *)meta,
-					  &exposure_time) == 0 &&
+	if (vmeta_frame_get_exposure_time(meta, &exposure_time) == 0 &&
 	    exposure_time > 0) {
-		char val[16];
+		char val[32];
 		/* Exposure time is in ms, convert to seconds */
-		snprintf(val, sizeof(val), "%.6f", exposure_time / 1000.0);
+		format_fraction_string(
+			val, sizeof(val), exposure_time / 1000.0);
 		write_exif(cb, EXIF_(EXPOSURE_TIME), val, userdata);
+		write_xmp(cb, XMP_(EXPOSURE_TIME), val, userdata);
 
 		/* ShutterSpeedValue (APEX) = -log2(exposure_time_sec) */
 		snprintf(val,
 			 sizeof(val),
-			 "%.4f",
+			 "%.9f",
 			 -log2(exposure_time / 1000.0));
 		write_exif(cb, EXIF_(SHUTTER_SPEED_VALUE), val, userdata);
 	}
 
 	uint32_t iso_speed = 0;
-	if (vmeta_frame_get_iso_speed((struct vmeta_frame *)meta, &iso_speed) ==
-		    0 &&
-	    iso_speed > 0) {
+	if (vmeta_frame_get_iso_speed(meta, &iso_speed) == 0 && iso_speed > 0) {
 		char val[16];
 		snprintf(val, sizeof(val), "%u", iso_speed);
 		write_exif(cb, EXIF_(ISO_SPEED_RATINGS), val, userdata);
+		write_xmp(cb, XMP_(ISO_SPEED_RATINGS), val, userdata);
 		write_exif(cb, EXIF_(ISO_SPEED), val, userdata);
 	}
 }
 
 
-static void write_frame_levels(const struct vmeta_frame *meta,
+static void write_frame_levels(struct vmeta_frame *meta,
 			       vmeta_photo_write_cb_t cb,
 			       void *userdata)
 {
 	uint16_t black_level = 0;
-	if (vmeta_frame_get_black_level((struct vmeta_frame *)meta,
-					&black_level) == 0) {
+	if (vmeta_frame_get_black_level(meta, &black_level) == 0) {
 		char val[16];
 		snprintf(val, sizeof(val), "%u", black_level);
 		write_exif(cb, EXIF_(BLACK_LEVEL), val, userdata);
 	}
 
 	uint16_t white_level = 0;
-	if (vmeta_frame_get_white_level((struct vmeta_frame *)meta,
-					&white_level) == 0) {
+	if (vmeta_frame_get_white_level(meta, &white_level) == 0) {
 		char val[16];
 		snprintf(val, sizeof(val), "%u", white_level);
 		write_exif(cb, EXIF_(WHITE_LEVEL), val, userdata);
@@ -650,22 +978,12 @@ static void write_frame_levels(const struct vmeta_frame *meta,
 }
 
 
-static void write_frame_optics(const struct vmeta_frame *meta,
+static void write_frame_optics(struct vmeta_frame *meta,
 			       vmeta_photo_write_cb_t cb,
 			       void *userdata)
 {
-	double ground_distance = 0;
-	if (vmeta_frame_get_ground_distance((struct vmeta_frame *)meta,
-					    &ground_distance) == 0) {
-		char val[32];
-		snprintf(val, sizeof(val), "%.2f/1", ground_distance);
-		write_xmp(
-			cb, XMP_(CAMERA_ABOVE_GROUND_ALTITUDE), val, userdata);
-	}
-
 	struct vmeta_xy pp;
-	if (vmeta_frame_get_camera_principal_point((struct vmeta_frame *)meta,
-						   &pp) == 0) {
+	if (vmeta_frame_get_camera_principal_point(meta, &pp) == 0) {
 		char val[64];
 		snprintf(val, sizeof(val), "%.8f,%.8f", pp.x, pp.y);
 		write_xmp(cb, XMP_(PRINCIPAL_POINT), val, userdata);
@@ -673,8 +991,7 @@ static void write_frame_optics(const struct vmeta_frame *meta,
 
 	uint16_t calibration_illuminant_1 = 0;
 	if (vmeta_frame_get_calibration_illuminant_1(
-		    (struct vmeta_frame *)meta, &calibration_illuminant_1) ==
-	    0) {
+		    meta, &calibration_illuminant_1) == 0) {
 		char val[16];
 		snprintf(val, sizeof(val), "%u", calibration_illuminant_1);
 		write_exif(cb, EXIF_(CALIBRATION_ILLUMINANT_1), val, userdata);
@@ -682,26 +999,22 @@ static void write_frame_optics(const struct vmeta_frame *meta,
 
 	float awb_r_gain = 0.0f;
 	float awb_b_gain = 0.0f;
-	if (vmeta_frame_get_awb_r_gain((struct vmeta_frame *)meta,
-				       &awb_r_gain) == 0 &&
-	    vmeta_frame_get_awb_b_gain((struct vmeta_frame *)meta,
-				       &awb_b_gain) == 0) {
-
-		if (awb_r_gain > 0.0f && awb_b_gain > 0.0f) {
-			char val[64];
-			snprintf(val,
-				 sizeof(val),
-				 "%.6f,%.6f,%.6f",
-				 1.0 / awb_r_gain,
-				 1.0,
-				 1.0 / awb_b_gain);
-			write_exif(cb, EXIF_(AS_SHOT_NEUTRAL), val, userdata);
-		}
+	if ((vmeta_frame_get_awb_r_gain(meta, &awb_r_gain) == 0) &&
+	    (vmeta_frame_get_awb_b_gain(meta, &awb_b_gain) == 0) &&
+	    (awb_r_gain > 0.0f) && (awb_b_gain > 0.0f)) {
+		char val[128];
+		snprintf(val,
+			 sizeof(val),
+			 "%.9f,%.9f,%.9f",
+			 1.0 / awb_r_gain,
+			 1.0,
+			 1.0 / awb_b_gain);
+		write_exif(cb, EXIF_(AS_SHOT_NEUTRAL), val, userdata);
 	}
 }
 
 
-static void write_frame_color_matrix(const struct vmeta_frame *meta,
+static void write_frame_color_matrix(struct vmeta_frame *meta,
 				     vmeta_photo_write_cb_t cb,
 				     void *userdata)
 {
@@ -712,8 +1025,7 @@ static void write_frame_color_matrix(const struct vmeta_frame *meta,
 	size_t len = 0;
 	size_t offset = 0;
 
-	res = vmeta_frame_get_color_matrix(
-		(struct vmeta_frame *)meta, NULL, &cm_count);
+	res = vmeta_frame_get_color_matrix(meta, NULL, &cm_count);
 	if (res != 0 || cm_count == 0)
 		return;
 
@@ -721,8 +1033,7 @@ static void write_frame_color_matrix(const struct vmeta_frame *meta,
 	if (cm == NULL)
 		return;
 
-	res = vmeta_frame_get_color_matrix(
-		(struct vmeta_frame *)meta, cm, &cm_count);
+	res = vmeta_frame_get_color_matrix(meta, cm, &cm_count);
 	if (res != 0)
 		goto out;
 
@@ -734,14 +1045,13 @@ static void write_frame_color_matrix(const struct vmeta_frame *meta,
 	for (size_t i = 0; i < cm_count; i++) {
 		int ret = snprintf(val + offset,
 				   len - offset,
-				   "%.8f%s",
+				   "%.9f%s",
 				   cm[i],
 				   (i < cm_count - 1) ? "," : "");
 		if (ret > 0)
 			offset += (size_t)ret;
 	}
 
-	write_xmp(cb, XMP_(COLOR_MATRIX), val, userdata);
 	write_exif(cb, EXIF_(COLOR_MATRIX_1), val, userdata);
 
 out:
@@ -750,13 +1060,10 @@ out:
 }
 
 
-static void write_frame_proto(const struct vmeta_frame *meta,
-			      vmeta_photo_write_cb_t cb,
-			      void *userdata)
+static void write_frame_proto(const struct vmeta_photo_write_ctx *ctx)
 {
 	const Vmeta__TimedMetadata *tm = NULL;
-	int res =
-		vmeta_frame_proto_get_unpacked((struct vmeta_frame *)meta, &tm);
+	int res = vmeta_frame_proto_get_unpacked(ctx->frame, &tm);
 	if (res != 0 || tm == NULL)
 		return;
 
@@ -767,119 +1074,163 @@ static void write_frame_proto(const struct vmeta_frame *meta,
 				 sizeof(val),
 				 "%u",
 				 tm->photo->exposure_program);
-			write_exif(cb, EXIF_(EXPOSURE_PROGRAM), val, userdata);
+			write_exif(ctx->cb,
+				   EXIF_(EXPOSURE_PROGRAM),
+				   val,
+				   ctx->userdata);
 		}
 
-		snprintf(val,
-			 sizeof(val),
-			 "%.4f",
-			 tm->photo->exposure_bias_value);
-		write_exif(cb, EXIF_(EXPOSURE_BIAS), val, userdata);
+		if (tm->photo->photo_date != 0) {
+			write_dates_internal(tm->photo->photo_date,
+					     tm->photo->photo_date_gmtoff,
+					     ctx->cb,
+					     ctx->userdata);
+		}
+
+		format_fraction_string(
+			val, sizeof(val), tm->photo->exposure_bias_value);
+		write_exif(ctx->cb, EXIF_(EXPOSURE_BIAS), val, ctx->userdata);
+		write_xmp(ctx->cb, XMP_(EXPOSURE_BIAS), val, ctx->userdata);
 
 		snprintf(val, sizeof(val), "%u", tm->photo->metering_mode);
-		write_exif(cb, EXIF_(METERING_MODE), val, userdata);
+		write_exif(ctx->cb, EXIF_(METERING_MODE), val, ctx->userdata);
+
 		snprintf(val, sizeof(val), "%u", tm->photo->light_source);
-		write_exif(cb, EXIF_(LIGHT_SOURCE), val, userdata);
+		write_exif(ctx->cb, EXIF_(LIGHT_SOURCE), val, ctx->userdata);
 
 		snprintf(val, sizeof(val), "%u", tm->photo->exposure_mode);
-		write_exif(cb, EXIF_(EXPOSURE_MODE), val, userdata);
+		write_exif(ctx->cb, EXIF_(EXPOSURE_MODE), val, ctx->userdata);
 
 		snprintf(val, sizeof(val), "%u", tm->photo->white_balance);
-		write_exif(cb, EXIF_(WHITE_BALANCE), val, userdata);
+		write_exif(ctx->cb, EXIF_(WHITE_BALANCE), val, ctx->userdata);
 
 		if (tm->photo->focal_length != 0.) {
-			snprintf(val,
-				 sizeof(val),
-				 "%.2f",
-				 tm->photo->focal_length);
-			write_exif(cb, EXIF_(FOCAL_LENGTH), val, userdata);
-			write_xmp(cb,
-				  XMP_(PERSPECTIVE_FOCAL_LENGTH),
-				  val,
-				  userdata);
-			write_xmp(cb,
-				  XMP_(PERSPECTIVE_FOCAL_LENGTH_UNITS),
-				  "mm",
-				  userdata);
+			format_fraction_string(
+				val, sizeof(val), tm->photo->focal_length);
+			write_exif(ctx->cb,
+				   EXIF_(FOCAL_LENGTH),
+				   val,
+				   ctx->userdata);
+
+			enum vmeta_camera_model_type model_type =
+				get_resolved_camera_model_type(ctx);
+			if (model_type == VMETA_CAMERA_MODEL_TYPE_PERSPECTIVE) {
+				write_xmp(ctx->cb,
+					  XMP_(PERSPECTIVE_FOCAL_LENGTH),
+					  val,
+					  ctx->userdata);
+				write_xmp(ctx->cb,
+					  XMP_(PERSPECTIVE_FOCAL_LENGTH_UNITS),
+					  "mm",
+					  ctx->userdata);
+			}
 		}
 		if (tm->photo->focal_length_in_35mm_film != 0.) {
 			snprintf(val,
 				 sizeof(val),
 				 "%.0f",
 				 tm->photo->focal_length_in_35mm_film);
-			write_exif(cb, EXIF_(FOCAL_LENGTH_35MM), val, userdata);
+			write_exif(ctx->cb,
+				   EXIF_(FOCAL_LENGTH_35MM),
+				   val,
+				   ctx->userdata);
 		}
 		if (tm->photo->f_number != 0.) {
-			snprintf(val, sizeof(val), "%.2f", tm->photo->f_number);
-			write_exif(cb, EXIF_(FNUMBER), val, userdata);
-			write_exif(cb, EXIF_(APERTURE_VALUE), val, userdata);
+			snprintf(val, sizeof(val), "%.9f", tm->photo->f_number);
+			write_exif(ctx->cb, EXIF_(FNUMBER), val, ctx->userdata);
+			snprintf(val,
+				 sizeof(val),
+				 "%.9f",
+				 2.0 * log2(tm->photo->f_number));
+			write_exif(ctx->cb,
+				   EXIF_(APERTURE_VALUE),
+				   val,
+				   ctx->userdata);
 		}
 		snprintf(val, sizeof(val), "%u", tm->photo->contrast);
-		write_exif(cb, EXIF_(CONTRAST), val, userdata);
+		write_exif(ctx->cb, EXIF_(CONTRAST), val, ctx->userdata);
 		snprintf(val, sizeof(val), "%u", tm->photo->saturation);
-		write_exif(cb, EXIF_(SATURATION), val, userdata);
+		write_exif(ctx->cb, EXIF_(SATURATION), val, ctx->userdata);
 		snprintf(val, sizeof(val), "%u", tm->photo->sharpness);
-		write_exif(cb, EXIF_(SHARPNESS), val, userdata);
-
-		snprintf(val, sizeof(val), "%u", tm->photo->sequence_number);
-		write_xmp(cb, XMP_(SEQUENCE_NUMBER), val, userdata);
+		write_exif(ctx->cb, EXIF_(SHARPNESS), val, ctx->userdata);
 
 		if (tm->photo->pixel_x_dimension != 0) {
 			snprintf(val,
 				 sizeof(val),
 				 "%u",
 				 tm->photo->pixel_x_dimension);
-			write_exif(cb, EXIF_(PIXEL_X_DIMENSION), val, userdata);
+			write_exif(ctx->cb,
+				   EXIF_(PIXEL_X_DIMENSION),
+				   val,
+				   ctx->userdata);
 		}
 		if (tm->photo->pixel_y_dimension != 0) {
 			snprintf(val,
 				 sizeof(val),
 				 "%u",
 				 tm->photo->pixel_y_dimension);
-			write_exif(cb, EXIF_(PIXEL_Y_DIMENSION), val, userdata);
+			write_exif(ctx->cb,
+				   EXIF_(PIXEL_Y_DIMENSION),
+				   val,
+				   ctx->userdata);
 		}
 		if (tm->photo->focal_plane_x_resolution != 0.) {
 			snprintf(val,
 				 sizeof(val),
-				 "%.4f",
+				 "%.6f",
 				 tm->photo->focal_plane_x_resolution);
-			write_exif(cb, EXIF_(FOCAL_PLANE_X_RES), val, userdata);
-			write_exif(cb,
+			write_exif(ctx->cb,
+				   EXIF_(FOCAL_PLANE_X_RES),
+				   val,
+				   ctx->userdata);
+			write_exif(ctx->cb,
 				   EXIF_(FOCAL_PLANE_RES_UNIT),
 				   "3",
-				   userdata); /* cm */
+				   ctx->userdata); /* cm */
 		}
 		if (tm->photo->focal_plane_y_resolution != 0.) {
 			snprintf(val,
 				 sizeof(val),
-				 "%.4f",
+				 "%.6f",
 				 tm->photo->focal_plane_y_resolution);
-			write_exif(cb, EXIF_(FOCAL_PLANE_Y_RES), val, userdata);
+			write_exif(ctx->cb,
+				   EXIF_(FOCAL_PLANE_Y_RES),
+				   val,
+				   ctx->userdata);
 		}
 		if (tm->photo->media_id != 0) {
-			char val[11];
 			snprintf(val,
 				 sizeof(val),
 				 "%" PRIu32,
 				 tm->photo->media_id);
-			write_xmp(cb, XMP_(MEDIA_ID), val, userdata);
+			write_xmp(ctx->cb, XMP_(MEDIA_ID), val, ctx->userdata);
 		}
 		if (tm->photo->resource_index != 0) {
-			char val[11];
 			snprintf(val,
 				 sizeof(val),
 				 "%" PRIu32,
 				 tm->photo->resource_index);
-			write_xmp(cb, XMP_(RESOURCE_INDEX), val, userdata);
+			write_xmp(ctx->cb,
+				  XMP_(RESOURCE_INDEX),
+				  val,
+				  ctx->userdata);
 		}
-		if (tm->photo->sequence_number != 0) {
-			char val[11];
+
+		if (ctx->session &&
+		    ctx->session->photo_mode == VMETA_PHOTO_MODE_PANORAMA) {
 			snprintf(val,
 				 sizeof(val),
 				 "%" PRIu32,
 				 tm->photo->sequence_number);
-			write_xmp(cb, XMP_(SEQUENCE_NUMBER), val, userdata);
+			write_xmp(ctx->cb,
+				  XMP_(SEQUENCE_NUMBER),
+				  val,
+				  ctx->userdata);
 		}
+
+		if (tm->photo->camera_model)
+			write_frame_camera_model(
+				tm->photo, ctx->cb, ctx->userdata);
 	}
 
 	if (tm->camera) {
@@ -889,28 +1240,31 @@ static void write_frame_proto(const struct vmeta_frame *meta,
 				 sizeof(val),
 				 "%u",
 				 tm->camera->utc_timestamp_accuracy);
-			write_xmp(cb, XMP_(UTC_TS_ACCURACY), val, userdata);
+			write_xmp(ctx->cb,
+				  XMP_(UTC_TS_ACCURACY),
+				  val,
+				  ctx->userdata);
 		}
 		if (tm->camera->spectrum !=
 		    VMETA__CAMERA_SPECTRUM__CS_UNKNOWN) {
 			write_xmp(
-				cb,
+				ctx->cb,
 				XMP_(CAMERA_SPECTRUM),
 				vmeta_camera_spectrum_to_str(
 					/* codecheck_ignore[LONG_LINE] */
 					vmeta_frame_camera_spectrum_proto_to_vmeta(
 						tm->camera->spectrum)),
-				userdata);
+				ctx->userdata);
 		}
 		if (tm->camera->serial_number[0] != '\0') {
-			write_xmp(cb,
+			write_xmp(ctx->cb,
 				  XMP_(CAMERA_SERIAL_NUMBER),
 				  tm->camera->serial_number,
-				  userdata);
-			write_exif(cb,
+				  ctx->userdata);
+			write_exif(ctx->cb,
 				   EXIF_(CAMERA_SERIAL_NUMBER),
 				   tm->camera->serial_number,
-				   userdata);
+				   ctx->userdata);
 		}
 	}
 
@@ -919,20 +1273,26 @@ static void write_frame_proto(const struct vmeta_frame *meta,
 		if (tm->thermal->min) {
 			snprintf(val,
 				 sizeof(val),
-				 "%.8f,%.8f,%.2f",
+				 "%.8f,%.8f,%u",
 				 tm->thermal->min->x,
 				 tm->thermal->min->y,
-				 tm->thermal->min->temp);
-			write_xmp(cb, XMP_(THERMAL_SPOT_MIN), val, userdata);
+				 tm->thermal->min->value);
+			write_xmp(ctx->cb,
+				  XMP_(THERMAL_SPOT_MIN),
+				  val,
+				  ctx->userdata);
 		}
 		if (tm->thermal->max) {
 			snprintf(val,
 				 sizeof(val),
-				 "%.8f,%.8f,%.2f",
+				 "%.8f,%.8f,%u",
 				 tm->thermal->max->x,
 				 tm->thermal->max->y,
-				 tm->thermal->max->temp);
-			write_xmp(cb, XMP_(THERMAL_SPOT_MAX), val, userdata);
+				 tm->thermal->max->value);
+			write_xmp(ctx->cb,
+				  XMP_(THERMAL_SPOT_MAX),
+				  val,
+				  ctx->userdata);
 		}
 		if (tm->thermal->mask) {
 			snprintf(val,
@@ -942,11 +1302,14 @@ static void write_frame_proto(const struct vmeta_frame *meta,
 				 tm->thermal->mask->y,
 				 tm->thermal->mask->width,
 				 tm->thermal->mask->height);
-			write_xmp(cb, XMP_(THERMAL_MASK), val, userdata);
+			write_xmp(ctx->cb,
+				  XMP_(THERMAL_MASK),
+				  val,
+				  ctx->userdata);
 		}
 	}
 
-	vmeta_frame_proto_release_unpacked((struct vmeta_frame *)meta, tm);
+	vmeta_frame_proto_release_unpacked(ctx->frame, tm);
 }
 
 
@@ -954,7 +1317,6 @@ static void write_frame_constants(vmeta_photo_write_cb_t cb, void *userdata)
 {
 	/* Constant values for Exif tags */
 	write_exif(cb, EXIF_(FLASH), "0", userdata);
-	write_exif(cb, EXIF_(DIGITAL_ZOOM_RATIO), "0", userdata);
 	write_exif(cb, EXIF_(SCENE_CAPTURE_TYPE), "0", userdata);
 	write_exif(cb, EXIF_(ORIENTATION), "1", userdata);
 	write_exif(cb, EXIF_(X_RESOLUTION), "72", userdata);
@@ -962,7 +1324,7 @@ static void write_frame_constants(vmeta_photo_write_cb_t cb, void *userdata)
 	write_exif(cb, EXIF_(RESOLUTION_UNIT), "2", userdata);
 	write_exif(cb,
 		   EXIF_(YCBCR_POSITIONING),
-		   "2",
+		   "1",
 		   userdata); /* Centered for JPEG */
 	write_exif(cb, EXIF_(EXIF_VERSION), "0231", userdata);
 	write_exif(cb, EXIF_(COMPONENTS_CONFIG), "1230", userdata);
@@ -973,35 +1335,80 @@ static void write_frame_constants(vmeta_photo_write_cb_t cb, void *userdata)
 		   EXIF_(SCENE_TYPE),
 		   "1",
 		   userdata); /* Directly photographed */
-	write_exif(cb, EXIF_(GPS_MAP_DATUM), "WGS-84", userdata);
-	write_exif(cb, EXIF_(SENSITIVITY_TYPE), "3", userdata);
+	write_exif(cb, EXIF_(SENSITIVITY_TYPE), "3", userdata); /* ISO Speed */
 
 	/* Constant values for Xmp tags */
-	write_xmp(cb, XMP_(CAMERA_HORIZ_CS), "EPSG:4326", userdata);
-	write_xmp(cb, XMP_(CAMERA_VERT_CS), "ellipsoidal", userdata);
+	write_xmp(cb, XMP_(ORIENTATION), "1", userdata);
+	write_xmp(cb,
+		  XMP_(YCBCR_POSITIONING),
+		  "1",
+		  userdata); /* Centered for JPEG */
 }
 
 
-int vmeta_frame_photo_write(const struct vmeta_frame *meta,
-			    vmeta_photo_write_cb_t cb,
-			    void *userdata)
+int vmeta_photo_write(const struct vmeta_session *session,
+		      struct vmeta_frame *frame,
+		      vmeta_photo_write_cb_t cb,
+		      void *userdata)
 {
-	ULOG_ERRNO_RETURN_ERR_IF(meta == NULL, EINVAL);
 	ULOG_ERRNO_RETURN_ERR_IF(cb == NULL, EINVAL);
 
-	write_frame_timestamps(meta, cb, userdata);
-	write_frame_location(meta, cb, userdata);
-	write_frame_orientation(meta, cb, userdata);
-	write_frame_exposure(meta, cb, userdata);
-	write_frame_levels(meta, cb, userdata);
-	write_frame_optics(meta, cb, userdata);
-	write_frame_color_matrix(meta, cb, userdata);
+	struct vmeta_photo_write_ctx ctx = {
+		.session = session,
+		.frame = frame,
+		.cb = cb,
+		.userdata = userdata,
+	};
 
-	/* Handle PROTO specific fields */
-	if (meta->type == VMETA_FRAME_TYPE_PROTO)
-		write_frame_proto(meta, cb, userdata);
+	if (session != NULL) {
+		if (session->title[0] != '\0') {
+			write_exif(cb,
+				   EXIF_(IMAGE_DESCRIPTION),
+				   session->title,
+				   userdata);
+			write_xmp(cb,
+				  XMP_(DC_DESCRIPTION),
+				  session->title,
+				  userdata);
+		}
 
-	write_frame_constants(cb, userdata);
+		if (session->copyright[0] != '\0') {
+			write_exif(cb,
+				   EXIF_(COPYRIGHT),
+				   session->copyright,
+				   userdata);
+			write_xmp(cb,
+				  XMP_(TIFF_COPYRIGHT),
+				  session->copyright,
+				  userdata);
+			write_xmp(cb,
+				  XMP_(DC_RIGHTS),
+				  session->copyright,
+				  userdata);
+		}
+
+		write_session_maker_model(session, cb, userdata);
+		write_session_versions(session, cb, userdata);
+		write_session_ids_and_misc(session, cb, userdata);
+		write_session_dates(session, cb, userdata);
+		write_session_camera_model(session, cb, userdata);
+	}
+
+	if (frame != NULL) {
+		write_frame_timestamps(frame, cb, userdata);
+		write_frame_location(frame, cb, userdata);
+		write_frame_orientation(frame, cb, userdata);
+		write_frame_exposure(frame, cb, userdata);
+		write_frame_levels(frame, cb, userdata);
+		write_frame_optics(frame, cb, userdata);
+		write_frame_color_matrix(frame, cb, userdata);
+
+		/* Handle PROTO specific fields */
+		if (frame->type == VMETA_FRAME_TYPE_PROTO)
+			write_frame_proto(&ctx);
+
+		write_frame_constants(cb, userdata);
+	}
 
 	return 0;
 }

@@ -30,7 +30,7 @@ package vmeta;
 
 import "google/protobuf/wrappers.proto";
 
-option java_package = "com.parrot.drone.groundsdk.protobuf";
+option java_package = "com.parrot.drone.groundsdk.protobuf.vmeta";
 option java_outer_classname = "VideoMetadata";
 
 /**
@@ -630,6 +630,16 @@ message PhotoMetadata {
 
 	/* Sequence number in a group of photos (optional, can be 0) */
 	uint32 sequence_number = 25;
+
+	/* Photo date and time in microseconds since the Epoch */
+	uint64 photo_date = 26;
+
+	/* Photo date GMT offset in seconds east (eg. GMT-6 is -21600) */
+	int32 photo_date_gmtoff = 27;
+
+	/* Camera model; when not empty, this value overrides the one
+	 * from session metadata */
+	CameraModel camera_model = 28;
 }
 
 
@@ -674,6 +684,9 @@ message DroneMetadata {
 
 	/* Battery charge percentage */
 	sint32 battery_percentage = 5;
+
+	/* Battery voltage */
+	google.protobuf.FloatValue battery_voltage = 14;
 
 	/* Flying state */
 	FlyingState flying_state = 7;

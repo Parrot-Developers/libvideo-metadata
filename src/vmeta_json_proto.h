@@ -43,7 +43,7 @@ union array_element_type {
 static inline int
 vmeta_json_add_array(struct json_object *jobj,
 		     const char *name,
-		     union array_element_type *val,
+		     const union array_element_type *val,
 		     size_t size,
 		     void (*object_nester)(struct json_object *,
 					   const char *,
